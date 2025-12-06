@@ -1,0 +1,1 @@
+"""Spatial grid generation utilities."""
