@@ -7,21 +7,15 @@
 
 ---
 
-## 📋 Table of Contents
+## 🌍 Select Language / Выберите язык / Seleccione idioma
 
-- [Project Purpose](#-project-purpose)
-- [Scientific Background](#-scientific-background)
-- [Data Sources](#-data-sources)
-  - [Proton Launch Vehicle Specifications](#proton-launch-vehicle-specifications)
-  - [Satellite Data](#satellite-data)
-- [Project Structure](#-project-structure)
-- [Mathematical Models](#-mathematical-models)
-- [Installation & Usage](#-installation--usage)
-- [Examples](#-examples)
-- [License](#-license)
-- [Русская версия](#-русская-версия)
+| 🇬🇧 [English](#-english) | 🇷🇺 [Русский](#-русский) | 🇪🇸 [Español](#-español) | 🤖 [AI/LLM Context](#-aillm-context) |
+|:---:|:---:|:---:|:---:|
 
 ---
+
+<details open>
+<summary><h2>🇬🇧 English</h2></summary>
 
 ## 🎯 Project Purpose
 
@@ -185,16 +179,10 @@ rocket-drop-zone-analysis-otu/
 │   └── report_generator.py     # Report generation
 │
 ├── tests/                      # Unit tests
-│   ├── test_ballistics.py      # Ballistics tests
-│   ├── test_monte_carlo.py     # Monte Carlo tests
-│   ├── test_indices.py         # Indices tests
-│   └── test_otu_logic.py       # OTU logic tests
-│
 ├── main.py                     # Entry point (demo)
 ├── run_pipeline.py             # Full simulation pipeline
 ├── run_otu_pipeline.py         # Q_OTU calculation pipeline
-├── requirements.txt            # Python dependencies
-└── README.md                   # Documentation
+└── requirements.txt            # Python dependencies
 ```
 
 ---
@@ -209,33 +197,17 @@ $$\frac{d\vec{r}}{dt} = \vec{v}$$
 
 $$\frac{d\vec{v}}{dt} = \vec{g} + \vec{a}_{drag} + \vec{a}_{wind}$$
 
-where:
-- $\vec{g}$ — gravitational acceleration accounting for altitude
-- $\vec{a}_{drag} = -\frac{1}{2} \cdot \rho \cdot C_d \cdot A_{ref} \cdot v^2 \cdot \frac{\vec{v}}{|v|} / m$
-- $\rho(h)$ — atmospheric density per standard atmosphere model
-
 ### 2. Atmosphere Model
 
 U.S. Standard Atmosphere 1976 with exponential interpolation between layers.
 
 ### 3. Dispersion Ellipse
 
-3σ dispersion ellipse is constructed from the covariance matrix of impact coordinates:
-
-$$\Sigma = \begin{bmatrix} \sigma_x^2 & \sigma_{xy} \\ \sigma_{xy} & \sigma_y^2 \end{bmatrix}$$
-
-Semi-axes are determined as eigenvalues of $\Sigma$ multiplied by 3.
+3σ dispersion ellipse is constructed from the covariance matrix of impact coordinates.
 
 ---
 
 ## 🚀 Installation & Usage
-
-### Requirements
-
-- Python 3.10+
-- Google Earth Engine account (for satellite data retrieval)
-
-### Installation
 
 ```bash
 # Clone the repository
@@ -244,35 +216,22 @@ cd rocket-drop-zone-analysis-otu
 
 # Create virtual environment
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# or
 venv\Scripts\activate     # Windows
+source venv/bin/activate  # Linux/Mac
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Authenticate with Google Earth Engine
 earthengine authenticate
-```
 
-### Running
-
-```bash
-# Demo run
+# Run demo
 python main.py
-
-# Full simulation pipeline (500 iterations)
-python run_pipeline.py --iterations 500 --gpu
-
-# Calculate Q_OTU for specified area
-python run_otu_pipeline.py --iterations 1000 --cell-size 1.0
 ```
 
 ---
 
 ## 📈 Examples
-
-### Basic Simulation
 
 ```python
 from core.monte_carlo import run_monte_carlo
@@ -281,50 +240,15 @@ from config.simulation_config import build_default_config
 
 config = build_default_config()
 config.iterations = 1000
-
 impacts = run_monte_carlo(PROTON_SEPARATION, config)
 ```
 
-### Q_OTU Calculation
-
-```python
-from otu.otu_logic import compute_otu_index, compute_q_si, compute_q_bi, compute_q_relief
-
-# Calculate components
-q_si = compute_q_si(bulk_density=1400, clay=350)
-q_bi = compute_q_bi(soc=45, nitrogen=3.5)
-q_relief = compute_q_relief(slope_degrees=12, is_water=0, aspect_degrees=180)
-
-# Composite index
-q_otu = compute_otu_index(q_vi=0.65, q_si=q_si, q_bi=q_bi, q_relief=q_relief)
-```
+</details>
 
 ---
-
-## 📄 License
-
-This project is created for scientific research purposes.
-
----
-
-## 👥 Author
-
-- Development: vel5id
-
----
-
-## 📞 Contact
-
-For questions and suggestions: [GitHub Issues](https://github.com/vel5id/rocket-drop-zone-analysis-otu/issues)
-
----
-
----
-
-# 🇷🇺 Русская версия
 
 <details>
-<summary><b>Нажмите, чтобы развернуть документацию на русском языке</b></summary>
+<summary><h2>🇷🇺 Русский</h2></summary>
 
 ## 🎯 Цель проекта
 
@@ -348,150 +272,286 @@ $$Q_{OTU} = (k_{Vi} \cdot Q_{Vi} + k_{Si} \cdot Q_{Si} + k_{Bi} \cdot Q_{Bi}) \t
 
 **Компоненты индекса:**
 
-| Индекс | Название | Весовой коэффициент | Описание |
-|--------|----------|---------------------|----------|
-| Q_Vi | Вегетационный индекс | k_Vi = 0.35 | Нормализованный NDVI, характеризует плотность растительного покрова |
-| Q_Si | Прочность почв | k_Si = 0.35 | Механическая устойчивость: 0.6×BD + 0.4×Clay |
-| Q_Bi | Качество почв (бонитет) | k_Bi = 0.30 | Биологическая продуктивность: 0.7×SOC + 0.3×N |
-| Q_Relief | Рельефный модификатор | множитель | Учитывает уклон, экспозицию склона и водные объекты |
+| Индекс | Название | Вес | Описание |
+|--------|----------|-----|----------|
+| Q_Vi | Вегетационный индекс | 0.35 | Нормализованный NDVI |
+| Q_Si | Прочность почв | 0.35 | 0.6×BD + 0.4×Clay |
+| Q_Bi | Качество почв | 0.30 | 0.7×SOC + 0.3×N |
+| Q_Relief | Рельеф | множитель | Уклон, экспозиция, водные объекты |
 
 ---
 
 ## 📊 Исходные данные
 
-### Характеристики ракеты-носителя "Протон"
+### Характеристики РН "Протон"
 
-Параметры первой ступени РН "Протон" взяты из открытых источников:
+Источники:
 - [Encyclopedia Astronautica](http://www.astronautix.com/p/proton.html)
 - [Gunter's Space Page](https://space.skyrocket.de/doc_lau/proton.htm)
-- Техническая документация ГКНПЦ им. М.В. Хруничева
+- Документация ГКНПЦ им. М.В. Хруничева
 
-#### Геометрические и массовые характеристики первой ступени
+#### Первая ступень
 
-| Параметр | Значение | Единица измерения |
-|----------|----------|-------------------|
+| Параметр | Значение | Ед. изм. |
+|----------|----------|----------|
 | Диаметр | 7.4 | м |
 | Длина | 21.18 | м |
-| Масса (сухая) | 30,600 | кг |
+| Сухая масса | 30,600 | кг |
 | Масса топлива | 428,300 | кг |
-| Опорная площадь | 43.0 | м² |
 
-#### Характеристики двигательной установки (6× РД-275М)
+#### Двигательная установка (6× РД-275М)
 
-| Параметр | Значение | Единица измерения |
-|----------|----------|-------------------|
-| Суммарная тяга | 10,026 | кН |
-| Удельный импульс (ур. моря) | 288 | с |
-| Удельный импульс (вакуум) | 316 | с |
+| Параметр | Значение | Ед. изм. |
+|----------|----------|----------|
+| Тяга | 10,026 | кН |
+| Уд. импульс (ур. моря) | 288 | с |
+| Уд. импульс (вакуум) | 316 | с |
 | Время работы | 123 | с |
 
-#### Параметры отделения первой ступени
+#### Параметры отделения
 
-| Параметр | Среднее | σ (СКО) | Единица |
-|----------|---------|---------|---------|
-| Высота отделения | 43,000 | 500 | м |
+| Параметр | Среднее | σ | Ед. |
+|----------|---------|---|-----|
+| Высота | 43,000 | 500 | м |
 | Скорость | 1,738 | 30 | м/с |
-| Угол наклона траектории | 25 | 1 | ° |
-| Азимут | 45 | 0.5 | ° |
-| Дальность до точки падения | 306 | — | км |
+| Угол траектории | 25 | 1 | ° |
+| Дальность | 306 | — | км |
 
-#### Возмущения для моделирования Монте-Карло
+### Спутниковые данные (Google Earth Engine)
 
-| Параметр | Распределение | Среднее | σ |
-|----------|---------------|---------|---|
-| Начальная скорость | Нормальное | 1,738 м/с | 150 м/с |
-| Начальная высота | Нормальное | 43,000 м | 2,000 м |
-| Угол наклона траектории | Нормальное | 25° | 4° |
-| Азимут | Нормальное | 45° | 3° |
-| Коэффициент сопротивления | Равномерное | [0.7, 1.5] | — |
-| Плотность воздуха (множитель) | Нормальное | 1.0 | 0.12 |
-| Ветер вдоль трассы | Нормальное | 0 | 40 м/с |
-| Ветер поперёк трассы | Нормальное | 0 | 40 м/с |
-| Масса ступени | Нормальное | 30,600 кг | 500 кг |
-
-### Спутниковые данные
-
-Экологические данные получены из **Google Earth Engine**:
-
-| Датасет | Идентификатор GEE | Разрешение | Описание |
-|---------|-------------------|------------|----------|
-| NDVI | `MODIS/061/MOD13A2` | 1 км | Индекс вегетации MODIS Terra (16-дневный композит) |
-| DEM | `USGS/SRTMGL1_003` | 30 м | Глобальная модель рельефа SRTM |
-| Водные объекты | `JRC/GSW1_4/GlobalSurfaceWater` | 30 м | Карта поверхностных вод JRC |
-| Почвы (глина) | `OpenLandMap/SOL/SOL_CLAY-WFRACTION_USDA-3A1A1A_M/v02` | 250 м | Содержание глины в почве |
-| Почвы (плотность) | SoilGrids 250m | 250 м | Объёмная плотность почвы |
-| Почвы (SOC) | SoilGrids 250m | 250 м | Органический углерод почвы |
-| Почвы (азот) | SoilGrids 250m | 250 м | Общий азот |
-
----
-
-## 🔬 Математические модели
-
-### 1. Баллистическая модель
-
-Уравнения движения в геоцентрической системе координат:
-
-$$\frac{d\vec{r}}{dt} = \vec{v}$$
-
-$$\frac{d\vec{v}}{dt} = \vec{g} + \vec{a}_{drag} + \vec{a}_{wind}$$
-
-где:
-- $\vec{g}$ — гравитационное ускорение с учётом высоты
-- $\vec{a}_{drag} = -\frac{1}{2} \cdot \rho \cdot C_d \cdot A_{ref} \cdot v^2 \cdot \frac{\vec{v}}{|v|} / m$
-- $\rho(h)$ — плотность атмосферы по стандартной атмосфере
-
-### 2. Модель атмосферы
-
-Используется U.S. Standard Atmosphere 1976 с экспоненциальной интерполяцией между слоями.
-
-### 3. Эллипс рассеивания
-
-3σ эллипс рассеивания строится на основе ковариационной матрицы координат падения:
-
-$$\Sigma = \begin{bmatrix} \sigma_x^2 & \sigma_{xy} \\ \sigma_{xy} & \sigma_y^2 \end{bmatrix}$$
-
-Полуоси эллипса определяются как собственные значения $\Sigma$, умноженные на 3.
+| Датасет | ID | Разрешение |
+|---------|----|------------|
+| NDVI | `MODIS/061/MOD13A2` | 1 км |
+| DEM | `USGS/SRTMGL1_003` | 30 м |
+| Водные объекты | `JRC/GSW1_4/GlobalSurfaceWater` | 30 м |
+| Почвы | SoilGrids 250m | 250 м |
 
 ---
 
 ## 🚀 Установка и запуск
 
-### Требования
-
-- Python 3.10+
-- Google Earth Engine account (для получения спутниковых данных)
-
-### Установка
-
 ```bash
-# Клонирование репозитория
 git clone https://github.com/vel5id/rocket-drop-zone-analysis-otu.git
 cd rocket-drop-zone-analysis-otu
-
-# Создание виртуального окружения
 python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# или
-venv\Scripts\activate     # Windows
-
-# Установка зависимостей
+venv\Scripts\activate
 pip install -r requirements.txt
-
-# Аутентификация в Google Earth Engine
 earthengine authenticate
-```
-
-### Запуск
-
-```bash
-# Демо запуск
 python main.py
-
-# Полный пайплайн симуляции (500 итераций)
-python run_pipeline.py --iterations 500 --gpu
-
-# Расчёт Q_OTU для заданной области
-python run_otu_pipeline.py --iterations 1000 --cell-size 1.0
 ```
 
 </details>
+
+---
+
+<details>
+<summary><h2>🇪🇸 Español</h2></summary>
+
+## 🎯 Propósito del Proyecto
+
+Este paquete de software fue desarrollado **para una publicación científica** dedicada a la metodología para determinar zonas de caída ecológicamente seguras para las partes separables de vehículos de lanzamiento.
+
+**Objetivos principales:**
+1. Modelado de trayectoria balística Monte Carlo de la primera etapa del Proton
+2. Construcción de elipses de dispersión 3σ para la zona de impacto
+3. Cálculo del índice ecológico compuesto Q_OTU para cada celda del territorio
+4. Visualización de resultados en mapas interactivos con superposición de datos satelitales
+
+---
+
+## 📚 Base Científica
+
+### Índice de Sostenibilidad Ecológica Territorial (Q_OTU)
+
+El índice compuesto Q_OTU evalúa la capacidad del territorio para resistir el daño ecológico de los impactos de fragmentos de cohetes:
+
+$$Q_{OTU} = (k_{Vi} \cdot Q_{Vi} + k_{Si} \cdot Q_{Si} + k_{Bi} \cdot Q_{Bi}) \times Q_{Relief}$$
+
+**Componentes del índice:**
+
+| Índice | Nombre | Peso | Descripción |
+|--------|--------|------|-------------|
+| Q_Vi | Índice de Vegetación | 0.35 | NDVI normalizado |
+| Q_Si | Resistencia del Suelo | 0.35 | 0.6×BD + 0.4×Arcilla |
+| Q_Bi | Calidad del Suelo | 0.30 | 0.7×SOC + 0.3×N |
+| Q_Relief | Modificador de Relieve | multiplicador | Pendiente, aspecto, cuerpos de agua |
+
+---
+
+## 📊 Fuentes de Datos
+
+### Especificaciones del Vehículo de Lanzamiento Proton
+
+Fuentes:
+- [Encyclopedia Astronautica](http://www.astronautix.com/p/proton.html)
+- [Gunter's Space Page](https://space.skyrocket.de/doc_lau/proton.htm)
+
+#### Primera Etapa
+
+| Parámetro | Valor | Unidad |
+|-----------|-------|--------|
+| Diámetro | 7.4 | m |
+| Longitud | 21.18 | m |
+| Masa Seca | 30,600 | kg |
+| Masa de Propelente | 428,300 | kg |
+
+#### Sistema de Propulsión (6× RD-275M)
+
+| Parámetro | Valor | Unidad |
+|-----------|-------|--------|
+| Empuje Total | 10,026 | kN |
+| Impulso Específico (nivel del mar) | 288 | s |
+| Impulso Específico (vacío) | 316 | s |
+| Tiempo de Combustión | 123 | s |
+
+### Datos Satelitales (Google Earth Engine)
+
+| Conjunto de Datos | ID | Resolución |
+|-------------------|----|------------|
+| NDVI | `MODIS/061/MOD13A2` | 1 km |
+| DEM | `USGS/SRTMGL1_003` | 30 m |
+| Cuerpos de Agua | `JRC/GSW1_4/GlobalSurfaceWater` | 30 m |
+| Suelos | SoilGrids 250m | 250 m |
+
+---
+
+## 🚀 Instalación y Uso
+
+```bash
+git clone https://github.com/vel5id/rocket-drop-zone-analysis-otu.git
+cd rocket-drop-zone-analysis-otu
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+earthengine authenticate
+python main.py
+```
+
+</details>
+
+---
+
+<details>
+<summary><h2>🤖 AI/LLM Context</h2></summary>
+
+## AI Assistant Instructions
+
+This section provides structured context for AI assistants (ChatGPT, Claude, Gemini, Copilot, etc.) working with this codebase.
+
+### Project Overview
+
+```yaml
+project_name: rocket-drop-zone-analysis-otu
+domain: Aerospace Engineering & Environmental Science
+purpose: Monte Carlo simulation of rocket stage drop zones + ecological impact assessment
+language: Python 3.10+
+key_dependencies:
+  - numpy, scipy, numba (computations)
+  - earthengine-api, geemap (satellite data)
+  - folium, plotly (visualization)
+  - geopandas, shapely (geospatial)
+```
+
+### Architecture Summary
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    SIMULATION PIPELINE                       │
+├─────────────────────────────────────────────────────────────┤
+│  config/           →  Rocket parameters, simulation config   │
+│  core/             →  Ballistics, atmosphere, Monte Carlo    │
+│  grid/             →  Spatial grid, dispersion ellipses      │
+├─────────────────────────────────────────────────────────────┤
+│                    ECOLOGICAL PIPELINE                        │
+├─────────────────────────────────────────────────────────────┤
+│  gee/              →  Google Earth Engine data fetching      │
+│  indices/          →  Individual ecological indices          │
+│  otu/              →  Composite Q_OTU calculation            │
+├─────────────────────────────────────────────────────────────┤
+│                    OUTPUT                                     │
+├─────────────────────────────────────────────────────────────┤
+│  visualization/    →  Maps, heatmaps, reports                │
+│  output/           →  Generated files (gitignored)           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Key Formulas
+
+**Q_OTU (Ecological Sustainability Index):**
+```
+Q_OTU = (0.35×Q_Vi + 0.35×Q_Si + 0.30×Q_Bi) × Q_Relief
+
+Where:
+- Q_Vi = normalized NDVI [0,1]
+- Q_Si = 0.6×norm(bulk_density) + 0.4×norm(clay) [0,1]
+- Q_Bi = 0.7×norm(SOC) + 0.3×norm(nitrogen) [0,1]
+- Q_Relief = f(slope, aspect, water) [0,1]
+```
+
+### Entry Points
+
+| Script | Purpose | Example |
+|--------|---------|---------|
+| `main.py` | Quick demo | `python main.py` |
+| `run_pipeline.py` | Full simulation | `python run_pipeline.py --iterations 500 --gpu` |
+| `run_otu_pipeline.py` | OTU calculation | `python run_otu_pipeline.py --iterations 1000` |
+
+### Important Files for Code Understanding
+
+| File | Description |
+|------|-------------|
+| `config/rocket_params.py` | Proton LV physical parameters |
+| `config/otu_config.py` | All Q_OTU weights and thresholds |
+| `core/monte_carlo.py` | Monte Carlo simulation driver |
+| `core/gpu_ballistics.py` | Numba JIT-accelerated ballistics |
+| `otu/otu_logic.py` | Core Q_OTU calculation logic |
+| `gee/local_processor.py` | GEE data fetching with chunking |
+| `visualization/satellite_overlay.py` | Interactive map generation |
+
+### Common Tasks
+
+**1. Modify rocket parameters:**
+Edit `config/rocket_params.py` — `PROTON_STAGE_ONE`, `PROTON_ENGINE_BLOCK`, `PROTON_SEPARATION`
+
+**2. Change Q_OTU weights:**
+Edit `config/otu_config.py` — `OTUWeights` class
+
+**3. Add new ecological index:**
+1. Create `indices/new_index.py`
+2. Add calculation in `otu/otu_logic.py`
+3. Update `otu/calculator.py` to include it
+
+**4. Change GEE datasets:**
+Edit `config/gee_config.py` — add new `DatasetReference`
+
+### Testing
+
+```bash
+pytest tests/ -v
+```
+
+### Code Style
+
+- Type hints used throughout
+- Dataclasses for configuration
+- NumPy vectorization preferred
+- Numba JIT for hot paths
+
+### Gotchas
+
+1. **GEE Authentication**: Requires `earthengine authenticate` before first run
+2. **GPU Mode**: Uses Numba JIT, not actual GPU — naming is legacy
+3. **Large Areas**: Use chunking via `chunk_manager.py` to avoid GEE payload limits
+4. **Output Files**: All in `output/` directory, gitignored
+
+</details>
+
+---
+
+## 👥 Author
+
+- Development: vel5id
+
+## 📞 Contact
+
+For questions and suggestions: [GitHub Issues](https://github.com/vel5id/rocket-drop-zone-analysis-otu/issues)
