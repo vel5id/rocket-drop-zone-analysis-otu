@@ -1,0 +1,189 @@
+# Deployment workflow for rocket-drop-zone-analysis-otu
+# Ссылка на спецификацию: infrastructure/deployment из требований проекта
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    branches: [main]
+    types:
+      - completed
+
+jobs:
+  deploy-staging:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install dependencies
+      run: |
+        pip install ansible
+    
+    - name: Deploy to staging
+      env:
+        ANSIBLE_HOST_KEY_CHECKING: false
+        STAGING_HOST: ${{ secrets.STAGING_HOST }}
+        STAGING_USER: ${{ secrets.STAGING_USER }}
+        STAGING_SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+      run: |
+        echo "$STAGING_SSH_KEY" > staging_key.pem
+        chmod 600 staging_key.pem
+        
+        cat > deploy-staging.yml << 'EOF'
+        ---
+        - hosts: staging
+          become: yes
+          vars:
+            app_name: rocket-drop-zone-analysis
+            app_user: rocketapp
+            app_dir: /opt/{{ app_name }}
+            python_version: 3.10
+            
+          tasks:
+            - name: Ensure app user exists
+              user:
+                name: "{{ app_user }}"
+                shell: /bin/bash
+                create_home: yes
+                system: no
+                
+            - name: Create application directory
+              file:
+                path: "{{ app_dir }}"
+                state: directory
+                owner: "{{ app_user }}"
+                group: "{{ app_user }}"
+                mode: '0755'
+                
+            - name: Copy application files
+              synchronize:
+                src: ./
+                dest: "{{ app_dir }}"
+                delete: yes
+                rsync_opts:
+                  - "--exclude=.git"
+                  - "--exclude=venv"
+                  - "--exclude=__pycache__"
+                  
+            - name: Install system dependencies
+              apt:
+                name:
+                  - python{{ python_version }}
+                  - python{{ python_version }}-venv
+                  - python{{ python_version }}-dev
+                  - libgdal-dev
+                  - libspatialindex-dev
+                  - nginx
+                state: present
+                update_cache: yes
+                
+            - name: Create virtual environment
+              pip:
+                virtualenv: "{{ app_dir }}/venv"
+                virtualenv_python: python{{ python_version }}
+                requirements: "{{ app_dir }}/requirements.txt"
+                
+            - name: Configure systemd service
+              template:
+                src: templates/rocket-app.service.j2
+                dest: /etc/systemd/system/rocket-app.service
+                owner: root
+                group: root
+                mode: '0644'
+              notify: restart rocket-app
+              
+            - name: Configure nginx
+              template:
+                src: templates/nginx-rocket.conf.j2
+                dest: /etc/nginx/sites-available/rocket-app
+                owner: root
+                group: root
+                mode: '0644'
+              notify: restart nginx
+              
+            - name: Enable nginx site
+              file:
+                src: /etc/nginx/sites-available/rocket-app
+                dest: /etc/nginx/sites-enabled/rocket-app
+                state: link
+                
+            - name: Create data directories
+              file:
+                path: "{{ item }}"
+                state: directory
+                owner: "{{ app_user }}"
+                group: "{{ app_user }}"
+                mode: '0755'
+              loop:
+                - "{{ app_dir }}/output"
+                - "{{ app_dir }}/outputs"
+                - "{{ app_dir }}/logs"
+                
+          handlers:
+            - name: restart rocket-app
+              systemd:
+                name: rocket-app
+                state: restarted
+                daemon_reload: yes
+                
+            - name: restart nginx
+              systemd:
+                name: nginx
+                state: restarted
+        EOF
+        
+        # Запуск Ansible playbook
+        ansible-playbook -i "$STAGING_HOST," -u "$STAGING_USER" --private-key staging_key.pem deploy-staging.yml
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Check if production deployment is approved
+      id: check-approval
+      run: |
+        # Здесь можно добавить логику проверки одобрения
+        echo "Production deployment requires manual approval"
+        echo "::set-output name=approved::true"
+    
+    - name: Deploy to production
+      if: steps.check-approval.outputs.approved == 'true'
+      uses: appleboy/ssh-action@master
+      with:
+        host: ${{ secrets.PRODUCTION_HOST }}
+        username: ${{ secrets.PRODUCTION_USER }}
+        key: ${{ secrets.PRODUCTION_SSH_KEY }}
+        script: |
+          cd /opt/rocket-drop-zone-analysis
+          git pull origin main
+          source venv/bin/activate
+          pip install -r requirements.txt
+          sudo systemctl restart rocket-app
+          echo "Deployment to production completed"
+
+  notify-deployment:
+    runs-on: ubuntu-latest
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    
+    steps:
+    - name: Send deployment notification
+      run: |
+        if [ "${{ needs.deploy-production.result }}" == "success" ]; then
+          echo "Production deployment successful"
+          # Отправка уведомления в Slack/Email
+        elif [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+          echo "Staging deployment successful"
+        else
+          echo "Deployment failed"
+        fi

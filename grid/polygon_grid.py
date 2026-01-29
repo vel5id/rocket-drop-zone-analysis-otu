@@ -6,6 +6,12 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, Tuple
 
+try:
+    from matplotlib.path import Path
+    HAS_MATPLOTLIB = True
+except ImportError:
+    HAS_MATPLOTLIB = False
+
 
 @dataclass
 class GridCell:
@@ -19,17 +25,7 @@ class GridCell:
 
 
 def create_ellipse_polygon(ellipse: dict, scale: float = 1.0, num_points: int = 64) -> List[Tuple[float, float]]:
-    """
-    Create ellipse polygon as list of (lat, lon) points.
-    
-    Args:
-        ellipse: Dict with center_lat, center_lon, semi_major_km, semi_minor_km, angle_deg
-        scale: Scale factor (1.0 = full size, 0.85 = 15% smaller)
-        num_points: Number of points for polygon approximation
-    
-    Returns:
-        List of (lat, lon) tuples representing polygon vertices
-    """
+    """Create ellipse polygon as list of (lat, lon) points."""
     clat = ellipse["center_lat"]
     clon = ellipse["center_lon"]
     a_km = ellipse["semi_major_km"] * scale
@@ -60,7 +56,7 @@ def create_ellipse_polygon(ellipse: dict, scale: float = 1.0, num_points: int = 
 
 
 def point_in_polygon(lat: float, lon: float, polygon: List[Tuple[float, float]]) -> bool:
-    """Check if point is inside polygon using ray casting algorithm."""
+    """Check if point is inside polygon using ray casting algorithm (Fallback)."""
     inside = False
     n = len(polygon)
     p1_lat, p1_lon = polygon[0]
@@ -106,25 +102,18 @@ def generate_grid_in_polygons(
     cell_size_km: float = 1.0,
 ) -> List[GridCell]:
     """
-    Generate grid cells that fall inside given polygons.
-    
-    Args:
-        polygons: List of polygon vertex lists
-        cell_size_km: Grid cell size in km
-    
-    Returns:
-        List of GridCell objects that intersect with polygons
+    Generate grid cells inside polygons using vectorized operations if available.
     """
     if not polygons:
         return []
-    
+
     # Get merged bounding box
     if len(polygons) == 1:
         min_lat, max_lat, min_lon, max_lon = get_polygon_bounds(polygons[0])
     else:
         min_lat, max_lat, min_lon, max_lon = merge_polygons(polygons[0], polygons[1])
-    
-    # Calculate grid parameters
+
+    # Grid params
     center_lat = (min_lat + max_lat) / 2
     lat_rad = math.radians(center_lat)
     
@@ -134,24 +123,77 @@ def generate_grid_in_polygons(
     cell_size_lat = cell_size_km * deg_per_km_lat
     cell_size_lon = cell_size_km * deg_per_km_lon
     
-    # Generate grid cells
+    # ---------------------------------------------------------
+    # OPTIMIZED VECTORIZED PATH (Matplotlib)
+    # ---------------------------------------------------------
+    if HAS_MATPLOTLIB:
+        paths = [Path(p) for p in polygons]
+        
+        # Determine strict grid steps
+        lat_steps = int(np.ceil((max_lat - min_lat) / cell_size_lat))
+        lon_steps = int(np.ceil((max_lon - min_lon) / cell_size_lon))
+        
+        # Create coordinates
+        lats = np.linspace(min_lat, min_lat + lat_steps * cell_size_lat, lat_steps + 1)
+        lons = np.linspace(min_lon, min_lon + lon_steps * cell_size_lon, lon_steps + 1)
+        
+        # We need centers of cells for point-in-polygon check
+        # Centers are (lat[i] + lat[i+1])/2
+        lats_c = (lats[:-1] + lats[1:]) / 2
+        lons_c = (lons[:-1] + lons[1:]) / 2
+        
+        # Meshgrid of centers
+        lon_grid_c, lat_grid_c = np.meshgrid(lons_c, lats_c)
+        
+        # Flatten
+        points_flat = np.column_stack((lat_grid_c.flatten(), lon_grid_c.flatten()))
+        
+        # Check containment
+        inside_mask = np.zeros(len(points_flat), dtype=bool)
+        for path in paths:
+            # path.contains_points expects (N, 2) array
+            inside_mask |= path.contains_points(points_flat)
+            
+        valid_indices = np.where(inside_mask)[0]
+        
+        cells = []
+        
+        # Reconstruct cell bounds from center
+        # HACK: Using fixed cell size from center
+        d_lat = cell_size_lat
+        d_lon = cell_size_lon
+        
+        for idx in valid_indices:
+            c_lat = points_flat[idx, 0]
+            c_lon = points_flat[idx, 1]
+            
+            cells.append(GridCell(
+                min_lat=c_lat - d_lat/2,
+                max_lat=c_lat + d_lat/2,
+                min_lon=c_lon - d_lon/2,
+                max_lon=c_lon + d_lon/2,
+                center_lat=c_lat,
+                center_lon=c_lon,
+            ))
+            
+        return cells
+
+    # ---------------------------------------------------------
+    # SLOW FALLBACK
+    # ---------------------------------------------------------
     cells = []
-    
     lat = min_lat
     while lat < max_lat:
         lon = min_lon
         while lon < max_lon:
-            # Cell bounds
             cell_min_lat = lat
             cell_max_lat = lat + cell_size_lat
             cell_min_lon = lon
             cell_max_lon = lon + cell_size_lon
             
-            # Cell center
             cell_center_lat = (cell_min_lat + cell_max_lat) / 2
             cell_center_lon = (cell_min_lon + cell_max_lon) / 2
             
-            # Check if cell center is inside any polygon
             inside_any = False
             for polygon in polygons:
                 if point_in_polygon(cell_center_lat, cell_center_lon, polygon):

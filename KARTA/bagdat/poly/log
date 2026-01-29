@@ -1,0 +1,10 @@
+201407021048   0     0     0lena       IMPORT AUTO c:\bagdat\poly\l_2.e00 c:\bagdat\poly\3_3
+201407021055   0     0     0lena ARCEDIT C:\BAGDAT\POLY\3_3
+201407021058   0     0     0lena ARCEDIT C:\BAGDAT\POLY\3_3
+201407021104   0     0     0lena ARCEDIT C:\BAGDAT\POLY\3_3
+201407021134   0     0     0lena ARCEDIT C:\BAGDAT\POLY\3_3
+201407021139   0     0     0lena       EXPORT COVER c:\bagdat\poly\3_3 c:\bagdat\poly\3_3         NONE #
+201407021214   0     0     0lena rename 3_3 l3_3
+201407021215   0     1     0lena       EXPORT COVER c:\bagdat\poly\l3_3 c:\bagdat\poly\l33         NONE #
+201407021522   0     0     0lena ARCEDIT C:\BAGDAT\POLY\L3_3
+201407021527   0     0     0lena ARCEDIT C:\BAGDAT\POLY\L3_3

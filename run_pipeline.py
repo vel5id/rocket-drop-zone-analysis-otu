@@ -8,9 +8,15 @@ import numpy as np
 
 try:
     from tqdm import tqdm
+    import sys
+    # Умный tqdm: отключается в неинтерактивном режиме
+    def smart_tqdm(iterable, **kwargs):
+        if not sys.stdout.isatty():
+            # Неинтерактивный режим - отключаем прогресс-бар
+            kwargs['disable'] = True
+        return tqdm(iterable, **kwargs)
 except ImportError:
-    # Fallback if tqdm not installed
-    def tqdm(iterable, **kwargs):
+    def smart_tqdm(iterable, **kwargs):
         desc = kwargs.get('desc', '')
         if desc:
             print(f"  {desc}...")
@@ -57,7 +63,7 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         
         gen_iter = range(iterations)
         if show_progress:
-            gen_iter = tqdm(gen_iter, desc="Generating states", leave=False)
+            gen_iter = smart_tqdm(gen_iter, desc="Generating states", leave=False)
         
         for i in gen_iter:
             initial_states[i] = [0.0, 0.0, rng.normal(43000, 2000), rng.normal(1738, 150),
@@ -78,7 +84,7 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         primary_geo = []
         conv_iter = range(iterations)
         if show_progress:
-            conv_iter = tqdm(conv_iter, desc="Converting primary", leave=False)
+            conv_iter = smart_tqdm(conv_iter, desc="Converting primary", leave=False)
         
         for i in conv_iter:
             pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, results[i, 0], results[i, 1])
@@ -91,7 +97,7 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         
         frag_iter = range(iterations)
         if show_progress:
-            frag_iter = tqdm(frag_iter, desc="Generating fragments", leave=False)
+            frag_iter = smart_tqdm(frag_iter, desc="Generating fragments", leave=False)
         
         for i in frag_iter:
             if rng.random() > frag_params.breakup_probability:
@@ -137,7 +143,7 @@ def run_simulation_standard(iterations: int = 1000, show_progress: bool = True) 
     impacts = []
     sim_iter = simulator.run()
     if show_progress:
-        sim_iter = tqdm(sim_iter, total=iterations * 5, desc="Simulating", leave=False)  # ~5 fragments per primary
+        sim_iter = smart_tqdm(sim_iter, total=iterations * 5, desc="Simulating", leave=False)  # ~5 fragments per primary
     
     for impact in sim_iter:
         impacts.append(impact)
@@ -152,14 +158,14 @@ def run_simulation_standard(iterations: int = 1000, show_progress: bool = True) 
     print("  Converting to geographic coordinates...")
     primary_geo = []
     if show_progress:
-        primary = tqdm(primary, desc="Converting primary", leave=False)
+        primary = smart_tqdm(primary, desc="Converting primary", leave=False)
     for imp in primary:
         pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, imp.downrange_m, imp.crossrange_m)
         primary_geo.append({'lat': pt.lat, 'lon': pt.lon, 'is_fragment': False, 'velocity': imp.impact_velocity_m_s})
     
     fragment_geo = []
     if show_progress:
-        fragments_iter = tqdm(fragments, desc="Converting fragments", leave=False)
+        fragments_iter = smart_tqdm(fragments, desc="Converting fragments", leave=False)
     else:
         fragments_iter = fragments
     for imp in fragments_iter:
@@ -246,15 +252,15 @@ def run_pipeline(
     fragment_ellipse = compute_ellipse_from_geo(fragment_geo) if fragment_geo else None
     
     print(f"\n  PRIMARY ELLIPSE:")
-    print(f"    Center: ({primary_ellipse['center_lat']:.4f}°N, {primary_ellipse['center_lon']:.4f}°E)")
+    print(f"    Center: ({primary_ellipse['center_lat']:.4f} deg N, {primary_ellipse['center_lon']:.4f} deg E)")
     print(f"    Size:   {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km")
-    print(f"    Angle:  {primary_ellipse['angle_deg']:.1f}° from North")
+    print(f"    Angle:  {primary_ellipse['angle_deg']:.1f} deg from North")
     
     if fragment_ellipse:
         print(f"\n  FRAGMENT ELLIPSE:")
-        print(f"    Center: ({fragment_ellipse['center_lat']:.4f}°N, {fragment_ellipse['center_lon']:.4f}°E)")
+        print(f"    Center: ({fragment_ellipse['center_lat']:.4f} deg N, {fragment_ellipse['center_lon']:.4f} deg E)")
         print(f"    Size:   {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km")
-        print(f"    Angle:  {fragment_ellipse['angle_deg']:.1f}° from North")
+        print(f"    Angle:  {fragment_ellipse['angle_deg']:.1f} deg from North")
     
     # Generate grid INSIDE ellipse polygons
     print("\n[Step 3/6] Generating analysis grid inside ellipse polygons...")
@@ -350,9 +356,9 @@ def run_pipeline(
     print("PIPELINE COMPLETE")
     print("="*60)
     print(f"  Simulation time: {sim_time:.2f}s")
-    print(f"  Primary ellipse: {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km @ {primary_ellipse['angle_deg']:.0f}°")
+    print(f"  Primary ellipse: {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km @ {primary_ellipse['angle_deg']:.0f} deg")
     if fragment_ellipse:
-        print(f"  Fragment ellipse: {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km @ {fragment_ellipse['angle_deg']:.0f}°")
+        print(f"  Fragment ellipse: {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km @ {fragment_ellipse['angle_deg']:.0f} deg")
     print(f"  Output: {output_dir}/")
     
     return summary

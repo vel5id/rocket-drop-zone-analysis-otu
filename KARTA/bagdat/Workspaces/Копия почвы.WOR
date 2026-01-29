@@ -1,0 +1,32 @@
+!Workspace
+!Version 400
+!Charset WindowsCyrillic
+Open Table "200000_.TAB" As _200000_ Interactive
+Open Table "Rigtoput" As Rigtoput Interactive
+Map From Rigtoput,_200000_,_200000_ 
+  Position (0.0520833,0.0520833) Units "in"
+  Width 5.95833 Units "in" Height 3.59375 Units "in" 
+Set Window FrontWindow() ScrollBars Off Autoscroll On
+Set Map
+  CoordSys Earth Projection 8, 1001, "m", 69, 0, 1, 12500000, 0
+  Center (12309673.14,5241208.715)
+  Zoom 87.55044472 Units "mi"
+  Preserve Zoom Display Zoom
+  XY Units "m" Distance Units "mi" Area Units "sq mi"
+Set Map
+  Layer 1
+    Display Graphic
+    Label Line None Position Center Font ("Times New Roman",0,9,0) Pen (1,2,0) 
+      With NAME
+      Parallel On Auto On Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 2
+    Display Graphic
+    Selectable Off
+    Zoom (0.4, 160) Units "mi" 
+  Layer 3
+    Display Off
+    Selectable Off
+    Zoom (0.4, 160) Units "mi" 
+Set Map Layer 1 Editable
+Set Window Frontwindow() Max

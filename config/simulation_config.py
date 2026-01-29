@@ -40,18 +40,19 @@ class SimulationConfig:
 
 DEFAULT_PERTURBATIONS: Dict[str, Perturbation] = {
     # Separation conditions
-    "initial_velocity": Perturbation("normal", (1_738.0, 150.0)),      # σ=150 m/s (~8% of velocity)
-    "initial_altitude": Perturbation("normal", (43_000.0, 2_000.0)),   # σ=2 km altitude variation
-    "flight_path_angle": Perturbation("normal", (25.0, 4.0)),          # σ=4° flight path angle
-    "azimuth": Perturbation("normal", (45.0, 3.0)),                    # σ=3° azimuth deviation
+    # ADJUSTED for more circular ellipses: reduced downrange spread, increased crossrange
+    "initial_velocity": Perturbation("normal", (1_738.0, 80.0)),       # σ=80 m/s (reduced from 150)
+    "initial_altitude": Perturbation("normal", (43_000.0, 1_500.0)),   # σ=1.5 km (reduced from 2)
+    "flight_path_angle": Perturbation("normal", (25.0, 3.0)),          # σ=3° (reduced from 4)
+    "azimuth": Perturbation("normal", (45.0, 6.0)),                    # σ=6° (increased from 3)
     
     # Aerodynamic uncertainties
     "drag_coefficient": Perturbation("uniform", (0.7, 1.5)),           # Wide Cd uncertainty (tumbling)
     "air_density_factor": Perturbation("normal", (1.0, 0.12)),         # σ=12% density variation
     
-    # Wind field (high-altitude winds can be very strong)
-    "wind_u": Perturbation("normal", (0.0, 40.0)),                     # σ=40 m/s along-track wind
-    "wind_v": Perturbation("normal", (0.0, 40.0)),                     # σ=40 m/s cross-track wind
+    # Wind field - increased crosstrack wind for rounder shape
+    "wind_u": Perturbation("normal", (0.0, 30.0)),                     # σ=30 m/s along-track (reduced)
+    "wind_v": Perturbation("normal", (0.0, 60.0)),                     # σ=60 m/s cross-track (increased)
     
     # Mass variation (residual propellant uncertainty)
     "initial_mass": Perturbation("normal", (30_600.0, 500.0)),         # σ=500 kg (~1.6%)

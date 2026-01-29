@@ -1,0 +1,7 @@
+200111011721   0    16     0Stuff c:\temp\grid1 = IDW(d:\казах\25\detoksikacia.shp,NDMG,#,2,SAMPLE,12,#,0.2,0, 0, 120, 120)
+200111011724   1    26     0Stuff c:\temp\grid1 = SPLINE(d:\казах\25\detoksikacia.shp,x,REGULARIZED,0.1,12,0.2,0, 0, 120, 120)
+200111011725   0    26     0Stuff c:\temp\grid1 = SPLINE(d:\казах\25\detoksikacia.shp,NDMG,REGULARIZED,0.1,12,0.2,0, 0, 120, 120)
+200111011728   1    23     0Stuff c:\temp\grid1 = IDW(d:\казах\25\detoksikacia.shp,NDMG,#,2,SAMPLE,8,#,0.2,-33.715686, -6, 153.715686, 126)
+200111011728   0     1     0Stuff c:\temp\ctour1.shp = CONTOUR(c:\temp\sface2,INTERVAL,1,0)
+200111011730   0    17     0Stuff c:\temp\grid1 = SPLINE(d:\казах\25\detoksikacia.shp,NDMG,TENSION,0.1,12,0.3,-43.102941, -12.6, 163.071569, 132.6)
+200111011732   0     1     0Stuff c:\temp\ctour2.shp = CONTOUR(c:\temp\sface1,INTERVAL,1,0)

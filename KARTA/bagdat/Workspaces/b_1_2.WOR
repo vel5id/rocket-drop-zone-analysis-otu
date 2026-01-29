@@ -1,0 +1,59 @@
+!Workspace
+!Version 600
+!Charset WindowsCyrillic
+Open Table "200000_.TAB" As _200000_
+Open Table "эллипс50км" As эллипс50км Interactive
+Open Table "25" As _25 Interactive
+Open Table "500000__.TAB" As _500000__ Interactive
+Open Table "Без цвета" As Без_цвета Interactive
+Open Table "15" As _15 Interactive
+Open Table "В цвете200000" As В_цвете200000 Interactive
+Open Table "Rigtoput" As Rigtoput Interactive
+Map From _15,Без_цвета,_25,эллипс50км,_500000__ 
+  Position (0.0520833,0.0520833) Units "in"
+  Width 3.94792 Units "in" Height 2.66667 Units "in" 
+Set Window FrontWindow() ScrollBars Off Autoscroll On
+Set Map
+  CoordSys Earth Projection 1, 1001
+  Center (66.08958675,47.21850726)
+  Zoom 312.8470548 Units "km"
+  Preserve Zoom Display Zoom
+  Distance Units "km" Area Units "sq km" XY Units "m"
+Set Map
+  Layer 1
+    Display Graphic
+    Label Line Arrow Position Right Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With ID
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 2
+    Display Graphic
+    Label Line Arrow Position Right Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With id
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 3
+    Display Graphic
+    Label Line Arrow Position Right Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With ID
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 4
+    Display Graphic
+    Label Line None Position Center Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With id
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 5
+    Display Graphic
+    Selectable Off
+    Zoom (1.1, 420) Units "km" 
+Set Map Layer 2 Editable
+Set Window FrontWindow() Printer
+ Name "HPDJ450c" Orientation Portrait Copies 1
+ Papersize 268
+Dim WorkspaceMaximizedWindow As Integer
+WorkspaceMaximizedWindow = Frontwindow()
+Set Window WorkspaceMaximizedWindow Max
+Set Map Window WorkspaceMaximizedWindow Preserve Scale
+Undim WorkspaceMaximizedWindow

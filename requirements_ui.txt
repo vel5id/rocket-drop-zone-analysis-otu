@@ -1,0 +1,29 @@
+# Core simulation dependencies (UI-compatible)
+# Adjusted for Python 3.14 (removed numba due to missing wheels)
+
+# Core scientific
+numpy>=1.24.0
+scipy>=1.11.0
+matplotlib>=3.8.0
+pandas>=2.1.0
+
+# GPU acceleration (disabled for Python 3.14)
+# numba>=0.58.0  <-- Removed: Not compatible with Python 3.14 yet
+
+# GIS (lightweight)
+shapely>=2.0.0
+pyproj>=3.6.0
+
+# Web server
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Utilities
+tqdm>=4.66.0
+requests>=2.31.0
+pyyaml>=6.0
+
+# Visualization
+folium>=0.15.0
+seaborn>=0.13.0

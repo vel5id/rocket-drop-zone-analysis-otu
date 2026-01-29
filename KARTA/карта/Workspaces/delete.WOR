@@ -1,0 +1,44 @@
+!Workspace
+!Version 400
+!Charset WindowsCyrillic
+Open Table "200000_.TAB" As _200000_ Interactive
+Open Table "15" As _15 Interactive
+Open Table "25" As _25 Interactive
+Open Table "Rigtoput" As Rigtoput Interactive
+Map From _25,_15,Rigtoput,_200000_ 
+  Position (0.0520833,0.0520833) Units "in"
+  Width 5.95833 Units "in" Height 3.88542 Units "in" 
+Set Window FrontWindow() ScrollBars Off Autoscroll On
+Set Map
+  CoordSys Earth Projection 8, 1001, "m", 69, 0, 1, 12500000, 0
+  Center (12311232.96,5244384.168)
+  Zoom 164.4965299 Units "km"
+  Preserve Zoom Display Zoom
+  Distance Units "km" Area Units "sq km" XY Units "m"
+Set Map
+  Layer 1
+    Display Graphic
+    Label Line Arrow Position Right Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With ID
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 2
+    Display Graphic
+    Label Line Arrow Position Right Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With ID
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 3
+    Display Graphic
+    Label Line None Position Center Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With AREA
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 4
+    Display Graphic
+    Selectable Off
+    Zoom (0.65, 260) Units "km" 
+Dim WorkspaceMaximizedWindow As Integer
+WorkspaceMaximizedWindow = Frontwindow()
+Set Window WorkspaceMaximizedWindow Max
+Undim WorkspaceMaximizedWindow
