@@ -257,10 +257,35 @@ and quality flags, are provided in Supplementary Table S1.
 
 def main():
     """Main execution function."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Create Sentinel-2 Scene Metadata Table (Table S1)")
+    parser.add_argument("--target_date", type=str, default="2024-09-09", help="Target date for NDVI (YYYY-MM-DD)")
+    parser.add_argument("--start_date", type=str, help="Start date for scene collection (YYYY-MM-DD). If not provided, defaults to target_date - 1 year.")
+    parser.add_argument("--end_date", type=str, help="End date for scene collection (YYYY-MM-DD). If not provided, defaults to target_date + 1 year.")
+    parser.add_argument("--cloud_threshold", type=int, default=30, help="Maximum cloud cover percentage")
+    parser.add_argument("--output_dir", type=str, default="outputs/supplementary_tables", help="Output directory")
+    args = parser.parse_args()
+    
     print("=" * 70)
     print("Task 1.1: Creating Sentinel-2 Scene Metadata Table (Table S1)")
     print("=" * 70)
     print()
+    
+    # Determine date range
+    from datetime import datetime, timedelta
+    target_date = datetime.strptime(args.target_date, "%Y-%m-%d")
+    if args.start_date:
+        start_date = args.start_date
+    else:
+        start_date = (target_date - timedelta(days=365)).strftime("%Y-%m-%d")
+    if args.end_date:
+        end_date = args.end_date
+    else:
+        end_date = (target_date + timedelta(days=365)).strftime("%Y-%m-%d")
+    
+    print(f"Target date: {args.target_date}")
+    print(f"Date range: {start_date} to {end_date}")
+    print(f"Cloud threshold: {args.cloud_threshold}%")
     
     # Define study area
     roi = create_study_area_roi()
@@ -268,16 +293,16 @@ def main():
     # Extract metadata
     df = extract_sentinel2_metadata(
         roi=roi,
-        start_date="2017-01-01",
-        end_date="2023-12-31",
-        cloud_threshold=30
+        start_date=start_date,
+        end_date=end_date,
+        cloud_threshold=args.cloud_threshold
     )
     
     # Add summary statistics
     df = add_summary_statistics(df)
     
     # Save outputs
-    output_dir = Path("outputs/supplementary_tables")
+    output_dir = Path(args.output_dir)
     save_table_s1(df, output_dir)
     
     # Generate manuscript text

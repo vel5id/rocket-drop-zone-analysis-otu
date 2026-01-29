@@ -5,8 +5,8 @@
 
 import {
     SimulationConfig,
-    SimulationStatus,
-    SimulationResult
+    SimulationResult,
+    SimulationStatus
 } from './types';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -42,6 +42,15 @@ export async function runSimulation(config: Partial<SimulationConfig> = {}): Pro
             launch_lat: config.launch_lat ?? 45.72341,
             launch_lon: config.launch_lon ?? 63.32275,
             azimuth: config.azimuth ?? 45.0,
+            target_date: config.target_date ?? "2024-09-09",
+            sep_altitude: config.sep_altitude ?? 43000.0,
+            sep_velocity: config.sep_velocity ?? 1738.0,
+            sep_fp_angle: config.sep_fp_angle ?? 25.0,
+            sep_azimuth: config.sep_azimuth ?? 0.0,
+            zone_id: config.zone_id,
+            rocket_dry_mass: config.rocket_dry_mass,
+            rocket_ref_area: config.rocket_ref_area,
+            hurricane_mode: config.hurricane_mode,
         }),
     });
 
@@ -49,6 +58,31 @@ export async function runSimulation(config: Partial<SimulationConfig> = {}): Pro
         throw new Error(`Simulation failed: ${response.statusText}`);
     }
 
+    return response.json();
+}
+
+/**
+ * Get a preview of the trajectory based on simulation configuration.
+ */
+export async function getTrajectoryPreview(config: SimulationConfig): Promise<TrajectoryResponse> {
+    const response = await fetch(`${API_BASE_URL}/simulation/preview`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...config,
+            // Ensure default values are applied if not provided in config
+            sep_altitude: config.sep_altitude ?? 43000.0,
+            sep_velocity: config.sep_velocity ?? 1738.0,
+            sep_fp_angle: config.sep_fp_angle ?? 25.0,
+            sep_azimuth: config.sep_azimuth ?? 0.0,
+            zone_id: config.zone_id,
+            rocket_dry_mass: config.rocket_dry_mass,
+            rocket_ref_area: config.rocket_ref_area,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`Trajectory preview failed: ${response.statusText}`);
+    }
     return response.json();
 }
 
@@ -121,4 +155,11 @@ export async function runAndWaitSimulation(
 ): Promise<SimulationResult> {
     const { job_id } = await runSimulation(config);
     return pollSimulation(job_id, onProgress);
+}
+
+/**
+ * Download a supplementary table file.
+ */
+export function getTableDownloadUrl(filename: string): string {
+    return `${API_BASE_URL}/outputs/tables/${filename}`;
 }

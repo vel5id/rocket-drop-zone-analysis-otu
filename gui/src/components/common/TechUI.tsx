@@ -1,5 +1,5 @@
-import React from 'react';
 import { ChevronDown } from 'lucide-react';
+import React from 'react';
 
 // ============================================
 // UI COMPONENTS
@@ -66,7 +66,7 @@ export const TechAccordion: React.FC<{ title: string; isOpen: boolean; onToggle:
                 <ChevronDown size={16} />
             </div>
         </button>
-        <div className={`transition-all duration-300 ${isOpen ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
+        <div className={`transition-all duration-300 ${isOpen ? 'max-h-[1200px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}`}>
             <div className="accordion-content border-t border-[rgba(255,255,255,0.05)]" style={{ padding: '20px' }}>
                 {children}
             </div>
@@ -83,11 +83,12 @@ export const TechSlider: React.FC<{
     max: number;
     step: number;
     unit?: string;
-}> = ({ label, value, onChange, min, max, step, unit }) => {
+    disabled?: boolean;
+}> = ({ label, value, onChange, min, max, step, unit, disabled }) => {
     const percentage = ((value - min) / (max - min)) * 100;
 
     return (
-        <div className="mb-6">
+        <div className={`mb-6 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
             <div className="flex justify-between items-center mb-3">
                 <span className="text-tech-label">{label}</span>
                 <div className="flex items-center gap-2">
@@ -102,6 +103,7 @@ export const TechSlider: React.FC<{
                 step={step}
                 value={value}
                 onChange={(e) => onChange(parseInt(e.target.value))}
+                disabled={disabled}
                 style={{ '--value-percent': `${percentage}%` } as React.CSSProperties}
             />
             <div className="flex justify-between text-[10px] text-[#475569] mt-2">
@@ -123,4 +125,55 @@ export const TechToggle: React.FC<{ label: string; checked: boolean; onChange: (
             <div className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow-lg transition-all ${checked ? 'right-1' : 'left-1'}`}></div>
         </div>
     </button>
+);
+// Input Component
+export const TechInput: React.FC<{
+    label: string;
+    value: string | number;
+    onChange: (val: string) => void;
+    type?: string;
+    placeholder?: string;
+    disabled?: boolean;
+}> = ({ label, value, onChange, type = "text", placeholder, disabled }) => (
+    <div className={`mb-6 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <span className="text-tech-label block mb-3">{label}</span>
+        <input
+            type={type}
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={disabled}
+            placeholder={placeholder}
+            className="w-full bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-lg py-3 px-4 text-white font-mono text-sm focus:outline-none focus:border-[#06b6d4] transition-all disabled:cursor-not-allowed"
+        />
+    </div>
+);
+
+// Select Component
+export const TechSelect: React.FC<{
+    label: string;
+    value: string;
+    onChange: (val: string) => void;
+    options: { value: string; label: string }[];
+    disabled?: boolean;
+}> = ({ label, value, onChange, options, disabled }) => (
+    <div className={`mb-6 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}>
+        <span className="text-tech-label block mb-3">{label}</span>
+        <div className="relative">
+            <select
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
+                className="w-full appearance-none bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.1)] rounded-lg py-3 px-4 text-white font-mono text-sm focus:outline-none focus:border-[#06b6d4] transition-all disabled:cursor-not-allowed"
+            >
+                {options.map((opt) => (
+                    <option key={opt.value} value={opt.value} className="bg-[#0f172a] text-white">
+                        {opt.label}
+                    </option>
+                ))}
+            </select>
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#94a3b8]">
+                <ChevronDown size={16} />
+            </div>
+        </div>
+    </div>
 );

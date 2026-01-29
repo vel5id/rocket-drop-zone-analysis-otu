@@ -1,7 +1,7 @@
+import { Activity, ChevronDown, Download, FileText, Layers, Minimize, Target, Zap, Database, Hash, Calendar, Code } from 'lucide-react';
 import React from 'react';
-import { Activity, Minimize, Zap, Target, Layers, Download, FileText, ChevronDown } from 'lucide-react';
-import { TechHeader, StatReadout, TechButton } from '../common/TechUI';
-import { UIStats, ActiveLayers } from '../../types';
+import { ActiveLayers, UIStats } from '../../types';
+import { StatReadout, TechButton, TechHeader } from '../common/TechUI';
 
 interface ResultsPanelProps {
     isOpen: boolean;
@@ -71,33 +71,47 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                     </table>
                                 </div>
 
-                                <TechHeader title="Visibility Layers" icon={Layers} />
-                                <div className="space-y-2">
-                                    {[
-                                        { id: 'primary', label: 'Primary Ellipse', color: '#ef4444' },
-                                        { id: 'fragments', label: 'Fragment Field', color: '#f59e0b' },
-                                        { id: 'points', label: 'Impact Points', color: '#06b6d4' },
-                                        { id: 'otu', label: 'OTU Heatmap', color: '#10b981' },
-                                    ].map((layer) => (
-                                        <button
-                                            key={layer.id}
-                                            onClick={() => toggleLayer(layer.id as keyof ActiveLayers)}
-                                            className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.15)]' : 'bg-transparent border-transparent opacity-60 hover:opacity-100'}`}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color, boxShadow: `0 0 8px ${layer.color}` }}></div>
-                                                <span className="text-sm font-medium text-[#94a3b8]">{layer.label}</span>
+                                {/* Scientific Reproducibility Section */}
+                                <div className="pt-4 border-t border-[rgba(255,255,255,0.05)]">
+                                    <TechHeader title="Scientific Reproducibility" icon={Database} />
+                                    <div className="bg-[rgba(0,0,0,0.3)] border border-[rgba(255,255,255,0.05)] rounded-xl p-4 mb-4">
+                                        <div className="space-y-2 text-xs font-mono">
+                                            <div className="flex justify-between">
+                                                <span className="text-[#64748b]">Analysis ID:</span>
+                                                <span className="text-white">SIM_{Date.now().toString(36).toUpperCase()}</span>
                                             </div>
-                                            <div className={`w-10 h-5 rounded-full relative transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[#06b6d4]' : 'bg-[rgba(255,255,255,0.1)]'}`}>
-                                                <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'right-0.5' : 'left-0.5'}`}></div>
+                                            <div className="flex justify-between">
+                                                <span className="text-[#64748b]">Date Range:</span>
+                                                <span className="text-white">2024-01-01 to 2024-12-31</span>
                                             </div>
-                                        </button>
-                                    ))}
-                                </div>
-
-                                <div className="pt-4 flex gap-3">
-                                    <TechButton icon={Download}>Export JSON</TechButton>
-                                    <TechButton icon={FileText}>Export CSV</TechButton>
+                                            <div className="flex justify-between">
+                                                <span className="text-[#64748b]">Config Hash:</span>
+                                                <span className="text-[#10b981]">a1b2c3d4</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-[#64748b]">Timestamp:</span>
+                                                <span className="text-white">{new Date().toISOString().split('T')[0]} {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <TechButton icon={Download} onClick={() => alert('Exporting full results package...')}>
+                                            Full Package
+                                        </TechButton>
+                                        <TechButton icon={FileText} onClick={() => alert('Exporting configuration...')}>
+                                            Config Only
+                                        </TechButton>
+                                        <TechButton icon={Code} onClick={() => alert('Exporting raw data...')}>
+                                            Raw Data
+                                        </TechButton>
+                                        <TechButton icon={Calendar} onClick={() => alert('Exporting time series...')}>
+                                            Time Series
+                                        </TechButton>
+                                    </div>
+                                    <div className="mt-3 text-[10px] text-[#475569] text-center">
+                                        Export for peer review, archival, or further analysis
+                                    </div>
                                 </div>
                             </div>
                         ) : (
@@ -108,6 +122,53 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                 <div className="absolute inset-0 scan-effect pointer-events-none overflow-hidden"></div>
                             </div>
                         )}
+
+                        {/* Visibility Layers - always available */}
+                        <div className="mt-6">
+                            <TechHeader title="Visibility Layers" icon={Layers} />
+                            <div className="space-y-2">
+                                {/* Simulation-dependent layers - only shown when simDone && stats */}
+                                {simDone && stats && [
+                                    { id: 'primary', label: 'Primary Ellipse', color: '#ef4444' },
+                                    { id: 'fragments', label: 'Fragment Field', color: '#f59e0b' },
+                                    { id: 'points', label: 'Impact Points', color: '#06b6d4' },
+                                    { id: 'otu', label: 'OTU Heatmap', color: '#10b981' },
+                                ].map((layer) => (
+                                    <button
+                                        key={layer.id}
+                                        onClick={() => toggleLayer(layer.id as keyof ActiveLayers)}
+                                        className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.15)]' : 'bg-transparent border-transparent opacity-60 hover:opacity-100'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color, boxShadow: `0 0 8px ${layer.color}` }}></div>
+                                            <span className="text-sm font-medium text-[#94a3b8]">{layer.label}</span>
+                                        </div>
+                                        <div className={`w-10 h-5 rounded-full relative transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[#06b6d4]' : 'bg-[rgba(255,255,255,0.1)]'}`}>
+                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'right-0.5' : 'left-0.5'}`}></div>
+                                        </div>
+                                    </button>
+                                ))}
+                                
+                                {/* Trajectory Preview - always available */}
+                                {[
+                                    { id: 'preview', label: 'Trajectory Preview', color: '#ffffff' },
+                                ].map((layer) => (
+                                    <button
+                                        key={layer.id}
+                                        onClick={() => toggleLayer(layer.id as keyof ActiveLayers)}
+                                        className={`w-full flex items-center justify-between p-3 rounded-lg border transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.15)]' : 'bg-transparent border-transparent opacity-60 hover:opacity-100'}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: layer.color, boxShadow: `0 0 8px ${layer.color}` }}></div>
+                                            <span className="text-sm font-medium text-[#94a3b8]">{layer.label}</span>
+                                        </div>
+                                        <div className={`w-10 h-5 rounded-full relative transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'bg-[#06b6d4]' : 'bg-[rgba(255,255,255,0.1)]'}`}>
+                                            <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-md transition-all ${activeLayers[layer.id as keyof ActiveLayers] ? 'right-0.5' : 'left-0.5'}`}></div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </aside>

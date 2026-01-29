@@ -3,6 +3,7 @@ export interface ActiveLayers {
     fragments: boolean;
     points: boolean;
     otu: boolean;
+    preview: boolean;
     ndvi: boolean;
     slope: boolean;
 }
@@ -77,6 +78,18 @@ export interface SimulationConfig {
     launch_lat: number;
     launch_lon: number;
     azimuth: number;
+    target_date: string;
+    start_date?: string;
+    end_date?: string;
+    sep_altitude: number;
+    sep_velocity: number;
+    sep_fp_angle: number;
+    sep_azimuth: number;
+    zone_id?: string;
+    rocket_dry_mass?: number;
+    rocket_ref_area?: number;
+    hurricane_mode?: boolean;
+    cloud_threshold?: number;
 }
 
 export interface SimulationStatus {
@@ -84,6 +97,19 @@ export interface SimulationStatus {
     status: 'pending' | 'running' | 'completed' | 'failed';
     progress: number;
     message?: string;
+}
+
+export interface TrajectoryPoint {
+    lat: number;
+    lon: number;
+    alt: number;
+    velocity: number;
+    time: number;
+}
+
+export interface TrajectoryResponse {
+    path: TrajectoryPoint[];
+    impact_point: TrajectoryPoint;
 }
 
 export interface SimulationResult {
@@ -106,6 +132,8 @@ export interface MapViewProps {
     fragmentEllipse?: EllipseData;
     impactPoints?: GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties>;
     otuGrid?: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties>;
+    // New prop for trajectory preview
+    previewTrajectory?: TrajectoryPoint[];
     activeLayers: ActiveLayers;
     onZoomChange: (zoom: number) => void;
     onCursorMove: (lat: number, lng: number) => void;

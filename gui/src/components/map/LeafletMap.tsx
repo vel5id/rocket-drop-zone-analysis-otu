@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { CircleMarker, LayerGroup, MapContainer, Polygon, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
-import { ActiveLayers, EllipseData, GeoJSONFeatureCollection, GeoJSONPoint, ImpactPointProperties, OTUCellProperties, GeoJSONPolygon, MapViewProps } from '../../types';
+import React, { useEffect } from 'react';
+import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { EllipseData, GeoJSONFeatureCollection, GeoJSONPoint, GeoJSONPolygon, ImpactPointProperties, MapViewProps, OTUCellProperties } from '../../types';
 import { generateEllipsePoints, getOTUColor } from '../../utils';
 
 const MapFitter = ({ primaryEllipse, fragmentEllipse }: { primaryEllipse?: EllipseData; fragmentEllipse?: EllipseData }) => {
@@ -60,7 +60,7 @@ const ImpactPointsLayer = React.memo(({ points }: { points: GeoJSONFeatureCollec
                 >
                     <Popup>
                         ID: {f.properties.id}<br />
-                        Range: {f.properties.downrange_km.toFixed(1)}km
+                        Range: {f.properties.downrange_km?.toFixed(1) ?? 'N/A'}km
                     </Popup>
                 </CircleMarker>
             ))}
@@ -70,29 +70,34 @@ const ImpactPointsLayer = React.memo(({ points }: { points: GeoJSONFeatureCollec
 
 // Optimization: Memoize OTU grid rendering
 const OTULayer = React.memo(({ grid }: { grid: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> }) => {
-    return (
-        <LayerGroup>
-            {grid.features?.map((f, i) => (
-                <Polygon
-                    key={f.properties.grid_id || i}
-                    positions={f.geometry.coordinates[0].map((c: any) => [c[1], c[0]])}
-                    pathOptions={{
-                        color: getOTUColor(f.properties.q_otu),
-                        fillColor: getOTUColor(f.properties.q_otu),
-                        fillOpacity: 0.6,
-                        weight: 1
-                    }}
-                >
-                    <Popup>
-                        <div style={{ fontFamily: 'monospace' }}>
-                            Grid: {f.properties.grid_id}<br />
-                            OTU: {f.properties.q_otu.toFixed(3)}
-                        </div>
-                    </Popup>
-                </Polygon>
-            ))}
-        </LayerGroup>
-    );
+    // Style function for GeoJSON
+    const style = (feature: any) => {
+        const val = feature?.properties?.q_otu;
+        // console.log('OTU Value:', val); // Debug one frame if needed, but might spam
+        return {
+            color: getOTUColor(typeof val === 'number' ? val : 0.5),
+            fillColor: getOTUColor(typeof val === 'number' ? val : 0.5),
+            fillOpacity: 0.6,
+            weight: 1
+        };
+    };
+
+    // Binding popups
+    const onEachFeature = (feature: any, layer: any) => {
+        if (feature.properties) {
+            const content = `
+                <div style="font-family: monospace;">
+                    <strong>Grid:</strong> ${feature.properties.grid_id}<br/>
+                    <strong>OTU:</strong> ${feature.properties.q_otu?.toFixed(3) ?? 'N/A'}<br/>
+                    <strong>NDVI:</strong> ${feature.properties.q_vi?.toFixed(3) ?? 'N/A'}<br/>
+                    <strong>Relief:</strong> ${feature.properties.q_relief?.toFixed(3) ?? 'N/A'}
+                </div>
+            `;
+            layer.bindPopup(content);
+        }
+    };
+
+    return <GeoJSON data={grid as any} style={style} onEachFeature={onEachFeature} />;
 });
 
 
@@ -118,6 +123,15 @@ const LeafletMap = (props: MapViewProps) => {
             <ZoomTracker onZoomChange={props.onZoomChange} />
             <MapFitter primaryEllipse={props.primaryEllipse} fragmentEllipse={props.fragmentEllipse} />
             <TileLayer url={getTileUrl()} maxZoom={19} />
+
+            {/* Hybrid Overlay: Labels & Borders from Dark Theme */}
+            {props.baseLayer === 'satellite' && (
+                <TileLayer
+                    url="https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png"
+                    zIndex={10}
+                    opacity={0.8}
+                />
+            )}
 
             {/* Launch Point Marker */}
             <CircleMarker
@@ -163,6 +177,26 @@ const LeafletMap = (props: MapViewProps) => {
 
             {props.activeLayers.points && props.impactPoints && (
                 <ImpactPointsLayer points={props.impactPoints} />
+            )}
+
+            {/* Preview Trajectory */}
+            {props.previewTrajectory && props.previewTrajectory.length > 0 && (
+                <>
+                    <Polyline
+                        positions={props.previewTrajectory.map(p => [p.lat, p.lon])}
+                        pathOptions={{ color: '#ffffff', weight: 2, opacity: 0.8, dashArray: '5, 10' }}
+                    />
+                    <CircleMarker
+                        center={[
+                            props.previewTrajectory[props.previewTrajectory.length - 1].lat,
+                            props.previewTrajectory[props.previewTrajectory.length - 1].lon
+                        ]}
+                        radius={4}
+                        pathOptions={{ color: '#ffffff', fillColor: '#ffffff', fillOpacity: 0.8 }}
+                    >
+                        <Popup>Nominal Impact Point</Popup>
+                    </CircleMarker>
+                </>
             )}
         </MapContainer>
     );

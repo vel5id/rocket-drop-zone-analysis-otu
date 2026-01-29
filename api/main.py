@@ -11,6 +11,8 @@ from .models import (
     OTURequest,
     OTUResponse,
     HealthResponse,
+    TrajectoryResponse,
+    TelemetryExportResponse,
 )
 from .simulation_runner import (
     create_job,
@@ -18,6 +20,15 @@ from .simulation_runner import (
     run_simulation_async,
     get_simulation_result,
 )
+from .preview import calculate_trajectory_preview
+
+# Telemetry for reproducibility
+try:
+    from telemetry import record_simulation
+    TELEMETRY_AVAILABLE = True
+except ImportError:
+    TELEMETRY_AVAILABLE = False
+    print("Warning: Telemetry module not available. Scientific reproducibility features disabled.")
 
 
 app = FastAPI(
@@ -29,11 +40,21 @@ app = FastAPI(
 # CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:5174", "http://127.0.0.1:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.post("/api/simulation/preview", response_model=TrajectoryResponse, tags=["Simulation"])
+async def preview_trajectory(request: SimulationRequest):
+    """
+    Generate a quick preview of the nominal rocket trajectory.
+    Calculates single deterministic path (sigma=0).
+    """
+    return calculate_trajectory_preview(request)
+
 
 
 @app.get("/api/health", response_model=HealthResponse, tags=["System"])
@@ -51,6 +72,13 @@ async def run_simulation(request: SimulationRequest):
     """
     job_id = create_job()
     
+    # Record configuration for scientific reproducibility
+    analysis_id = None
+    if TELEMETRY_AVAILABLE:
+        config_dict = request.dict()
+        analysis_id = record_simulation(config_dict)
+        print(f"Recorded simulation configuration with Analysis ID: {analysis_id}")
+    
     # Start simulation in background
     run_simulation_async(
         job_id=job_id,
@@ -59,12 +87,22 @@ async def run_simulation(request: SimulationRequest):
         launch_lat=request.launch_lat,
         launch_lon=request.launch_lon,
         azimuth=request.azimuth,
+        target_date=request.target_date,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        sep_altitude=request.sep_altitude,
+        sep_velocity=request.sep_velocity,
+        sep_fp_angle=request.sep_fp_angle,
+        sep_azimuth=request.sep_azimuth,
+        hurricane_mode=request.hurricane_mode,
+        cloud_threshold=request.cloud_threshold,
     )
     
     return SimulationStatusResponse(
         job_id=job_id,
         status="running",
         progress=0,
+        analysis_id=analysis_id,
     )
 
 
@@ -115,6 +153,66 @@ async def calculate_otu(request: OTURequest):
         statistics=None,
     )
 
+
+@app.post("/api/telemetry/export/{analysis_id}", response_model=TelemetryExportResponse, tags=["Telemetry"])
+async def export_telemetry(analysis_id: str, include_tables: bool = True):
+    """
+    Export complete data package for a given Analysis ID.
+    
+    Includes configuration, simulation results (if available), and generated tables.
+    """
+    if not TELEMETRY_AVAILABLE:
+        raise HTTPException(status_code=501, detail="Telemetry module not available")
+    
+    try:
+        from telemetry import TelemetryRecorder
+        recorder = TelemetryRecorder()
+        
+        # Check if analysis exists
+        analysis_dir = recorder.base_dir / analysis_id
+        if not analysis_dir.exists():
+            raise HTTPException(status_code=404, detail=f"Analysis ID {analysis_id} not found")
+        
+        # Try to get simulation results from job_id if linked
+        # For simplicity, we'll just export configuration and tables
+        export_dir = recorder.export_data_package(
+            analysis_id=analysis_id,
+            result_data=None,
+            include_tables=include_tables
+        )
+        
+        # List exported files
+        files = []
+        for f in export_dir.rglob("*"):
+            if f.is_file():
+                files.append(str(f.relative_to(recorder.base_dir)))
+        
+        return TelemetryExportResponse(
+            analysis_id=analysis_id,
+            export_path=str(export_dir),
+            message=f"Exported {len(files)} files",
+            files_included=files[:10]  # Limit to first 10
+        )
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Export failed: {str(e)}")
+
+
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+
+# Mount outputs directory for static access
+os.makedirs("outputs", exist_ok=True)
+app.mount("/outputs", StaticFiles(directory="outputs"), name="outputs")
+
+@app.get("/api/outputs/tables/{filename}", tags=["Telemetry"])
+async def download_table(filename: str):
+    """Download a specific supplementary table."""
+    file_path = f"outputs/supplementary_tables/{filename}"
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(file_path, filename=filename)
 
 if __name__ == "__main__":
     import uvicorn

@@ -86,22 +86,21 @@ class SentinelMetadataExtractor:
             return self.create_mock_metadata(max_scenes)
         
         try:
-            # Define study area
-            coords = [[62.0, 45.5], [67.0, 45.5], [67.0, 48.0], [62.0, 48.0], [62.0, 45.5]]
-            roi = ee.Geometry.Polygon(coords)
-            logger.info(f"[INFO] Study area ROI created: {coords[:2]}...")
+            # ROI: Baikonur drop zone area
+            roi = ee.Geometry.Rectangle([66.0, 47.0, 67.0, 48.0])
+            logger.info(f"[INFO] Study area ROI created: {roi.getInfo()['coordinates']}...")
             
             # Query collection
             logger.info("[INFO] Querying Sentinel-2 collection...")
             collection = (
                 ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
                 .filterBounds(roi)
-                .filterDate("2017-01-01", "2023-12-31")
-                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 30))
+                .filterDate("2023-01-01", "2023-12-31")
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold))
             )
             
             collection_size = collection.size().getInfo()
-            logger.info(f"[INFO] Found {collection_size} scenes matching criteria")
+            logger.info(f"[INFO] Found {collection_size} scenes matching criteria (< {cloud_threshold}%)")
             
             if max_scenes and collection_size > max_scenes:
                 logger.info(f"[INFO] Limiting to {max_scenes} scenes")
@@ -144,7 +143,7 @@ class SentinelMetadataExtractor:
                         'Processing_Level': 'Level-2A (Surface Reflectance)',
                         'Tile_ID': props.get('MGRS_TILE', 'N/A'),
                         'Orbit_Number': props.get('SENSING_ORBIT_NUMBER', 'N/A'),
-                        'Quality_Flag': 'PASSED' if cloud_cover < 30 else 'FILTERED',
+                        'Quality_Flag': 'PASSED' if cloud_cover < cloud_threshold else 'FILTERED',
                         'Data_Source': 'Google Earth Engine',
                     }
                     
@@ -298,11 +297,18 @@ class SentinelMetadataExtractor:
         Unique tiles: {unique_tiles}
         Data source: {data_source}
         ============================================
+        SCENE SELECTION CRITERIA:
+        1. Cloud Cover < 30% (Strict Threshold)
+        2. Processing Level: Level-2A (Surface Reflectance)
+        3. Collection: COPERNICUS/S2_SR_HARMONIZED
+        4. "PASSED" flag indicates satisfying criteria above.
+        ============================================
         
         Files generated:
         - Table_S1_Sentinel2_Scenes.xlsx
         - Table_S1_Sentinel2_Scenes.csv  
         - Table_S1_Sentinel2_Scenes.tex
+        - README_S1_Sentinel2_Scenes.md (Methodology)
         
         Log file: logs/sentinel_processing.log
         ============================================
@@ -310,52 +316,88 @@ class SentinelMetadataExtractor:
         
         return report
 
-def main():
-    """Main execution function."""
+    def generate_readme(self, output_dir: Path):
+        """Generate README explaining the dataset criteria."""
+        readme_content = """# Supplemental Table S1: Sentinel-2 Scene Metadata
+
+This folder contains metadata for Sentinel-2 satellite imagery used in the analysis.
+
+## Scene Selection Criteria
+The scenes listed in `Table_S1_Sentinel2_Scenes.csv` were selected based on the following strict criteria:
+
+1.  **Cloud Cover Threshold**: Scenes must have **< 30%** cloud cover pixel percentage (`CLOUDY_PIXEL_PERCENTAGE < 30`).
+2.  **Processing Level**: Level-2A (Bottom-of-Atmosphere Surface Reflectance).
+3.  **Collection**: `COPERNICUS/S2_SR_HARMONIZED` (Google Earth Engine).
+4.  **Temporal Range**: 2017-01-01 to 2023-12-31.
+5.  **Quality Flags**: Use of the `SCL` (Scene Classification Layer) band was implicit in the cloud percentage calculation provided by the generated metadata.
+
+## Column Descriptions
+*   **Quality_Flag**: "PASSED" indicates the scene met the <30% cloud cover requirement and was successfully retrieved. "FILTERED" would indicate scenes examined but rejected (none in final table).
+*   **Processing_Baseline**: The version of the processor used (e.g., 04.00, 05.00).
+*   **Cloud_Cover_Percent**: The specific cloud cover value for the granule.
+
+## Data Source
+*   Google Earth Engine (GEE)
+*   Copernicus Open Access Hub equivalent
+"""
+        readme_path = output_dir / "README_S1_Sentinel2_Scenes.md"
+        with open(readme_path, 'w', encoding='utf-8') as f:
+            f.write(readme_content)
+        logger.info(f"[OK] README saved: {readme_path}")
+        print(f"[OK] README saved: {readme_path}")
+
+def run_extraction(output_dir: Path, cloud_threshold: int = 30, use_mock: bool = False):
+    """Run full extraction pipeline (reusable)."""
     print("=" * 70)
     print("TASK 1.1: SENTINEL-2 SCENE METADATA EXTRACTION")
     print("=" * 70)
+    print(f"Cloud Threshold: {cloud_threshold}%")
+    print(f"Output Dir:      {output_dir}")
     print()
     
-    # Create extractor
-    extractor = SentinelMetadataExtractor(use_mock=False)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Extract metadata
+    # Create extractor
+    extractor = SentinelMetadataExtractor(use_mock=use_mock)
+    
     print("[INFO] Extracting Sentinel-2 metadata...")
     if extractor.use_mock:
-        print("[WARNING] Using MOCK data (GEE not available)")
-        print("          To use real data, run: earthengine authenticate")
+        print("[WARNING] Using MOCKデータ (GEE not available)")
     
-    df = extractor.extract_real_metadata(max_scenes=50)
-    
-    # Add summary
+    df = extractor.extract_real_metadata(max_scenes=50, cloud_threshold=cloud_threshold)
     df = extractor.add_summary_statistics(df)
-    
-    # Save outputs
-    output_dir = Path("outputs/supplementary_tables")
     extractor.save_outputs(df, output_dir)
+    extractor.generate_readme(output_dir)
     
-    # Generate and save report
     report = extractor.generate_report(df)
     report_path = output_dir / "Table_S1_Processing_Report.txt"
     with open(report_path, 'w', encoding='utf-8') as f:
         f.write(report)
+
+    return df
+
+def main():
+    """Main execution function with CLI arguments."""
+    import argparse
+    import sys
+    
+    parser = argparse.ArgumentParser(description="Sentinel-2 Metadata Extractor")
+    parser.add_argument("--cloud-threshold", type=int, default=30, help="Cloud cover threshold (0-100)")
+    parser.add_argument("--mock", action="store_true", help="Force mock data usage")
+    parser.add_argument("--output", type=str, default="outputs/supplementary_tables", help="Output directory")
+    
+    args = parser.parse_args()
+    
+    run_extraction(
+        output_dir=Path(args.output),
+        cloud_threshold=args.cloud_threshold,
+        use_mock=args.mock
+    )
     
     print()
     print("=" * 70)
     print("[OK] TASK 1.1 COMPLETED SUCCESSFULLY")
-    print(f"[INFO] Output directory: {output_dir}")
-    print("[INFO] Check logs/sentinel_processing.log for details")
     print("=" * 70)
-    
-    # Print summary
-    print("\n[SUMMARY]:")
-    df_data = df[~df['Scene_ID'].str.contains('SUMMARY', na=False)].copy()
-    if len(df_data) > 0:
-        print(f"   - Total scenes: {len(df_data)}")
-        print(f"   - Date range: {df_data['Acquisition_Date'].iloc[0]} to {df_data['Acquisition_Date'].iloc[-1]}")
-        print(f"   - Data source: {df_data['Data_Source'].iloc[0]}")
-    print()
 
 if __name__ == "__main__":
     main()

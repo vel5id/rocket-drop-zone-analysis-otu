@@ -31,6 +31,7 @@ class SimulationResult:
     impact_points: Dict = field(default_factory=dict)
     otu_grid: Dict = field(default_factory=dict)
     stats: Dict = field(default_factory=dict)
+    date_config: Dict = field(default_factory=dict)
     
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -39,6 +40,7 @@ class SimulationResult:
             "impact_points": self.impact_points,
             "otu_grid": self.otu_grid,
             "stats": self.stats,
+            "date_config": self.date_config,
         }
 
 
@@ -48,7 +50,18 @@ def run_simulation_safe(
     launch_lat: float = 45.72341,
     launch_lon: float = 63.32275,
     azimuth: float = 45.0,
+    target_date: str = "2024-09-09",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    sep_altitude: float = 43000.0,
+    sep_velocity: float = 1738.0,
+    sep_fp_angle: float = 25.0,
+    sep_azimuth: float = 0.0,
+    zone_id: Optional[str] = None,
+    rocket_dry_mass: float = 30600.0,
+    rocket_ref_area: float = 43.0,
     cell_size_km: float = 1.0,
+    hurricane_mode: bool = False,
     progress_callback: Optional[Callable[[int, str], None]] = None,
 ) -> SimulationResult:
     """
@@ -57,7 +70,7 @@ def run_simulation_safe(
     This is the main entry point for the UI backend.
     
     Steps:
-        1. Monte Carlo simulation (run_pipeline.py)
+        1. Monte Carlo simulation (run_pipeline.py) OR Zone Preset Lookup
         2. Filter outliers from fragments
         3. Compute ellipses with size limits
         4. Generate grid with cell cap
@@ -82,45 +95,122 @@ def run_simulation_safe(
     
     start_time = time.time()
     
+    # Init variables
+    primary_geo = []
+    fragment_geo = []
+    sim_time = 0
+    filtered_fragments = []
+    
     # =========================================================================
-    # STEP 1: Monte Carlo Simulation
+    # STEP 1: Monte Carlo Simulation OR Zone Preset
     # =========================================================================
-    update(5, "Importing simulation modules...")
     
-    from run_pipeline import run_simulation_gpu, run_simulation_standard
-    
-    update(10, f"Running Monte Carlo ({iterations} iterations)...")
-    
-    if use_gpu:
-        try:
-            from core.gpu_ballistics import HAS_NUMBA
-            mode = "GPU" if HAS_NUMBA else "CPU (Parallel)"
-            update(15, f"Running {mode} Monte Carlo...")
-        except ImportError:
-            update(15, "Running Monte Carlo...")
+    # CHECK FOR ZONE ID OVERRIDE
+    if zone_id and zone_id.startswith("yu24_"):
+        update(10, f"Using Zone Preset: {zone_id}...")
+        from config.zones import YU24_ZONES
         
-        primary_geo, fragment_geo, sim_time = run_simulation_gpu(iterations, show_progress=False)
+        # Determine which zones to use based on selection
+        # Logic: If specific zone selected (e.g. 15), make it primary. 
+        # If "all" or general, use both. 
+        # For this implementation, we map specific IDs to the 15/25 split
+        
+        # Default behavior for now: Load both Zone 15 and 25 as Primary/Fragment
+        # strict mapping implies:
+        z15 = YU24_ZONES["yu24_15"]
+        z25 = YU24_ZONES["yu24_25"]
+        
+        # Construct ellipse dicts directly
+        primary_ellipse = {
+            "center_lat": z15.center_lat,
+            "center_lon": z15.center_lon,
+            "semi_major_km": z15.semi_major_km,
+            "semi_minor_km": z15.semi_minor_km,
+            "angle_deg": z15.angle_deg,
+        }
+        
+        fragment_ellipse = {
+            "center_lat": z25.center_lat,
+            "center_lon": z25.center_lon,
+            "semi_major_km": z25.semi_major_km,
+            "semi_minor_km": z25.semi_minor_km,
+            "angle_deg": z25.angle_deg,
+        }
+        
+        update(50, "Zone parameters loaded (Monte Carlo skipped)")
+        
+        # Skip straight to Grid Generation
+        # (filtered_fragments remain empty as we don't have points)
+        
     else:
-        update(15, "Running Standard Monte Carlo...")
-        primary_geo, fragment_geo, sim_time = run_simulation_standard(iterations, show_progress=False)
+        # NORMAL MONTE CARLO FLOW
+        update(5, "Importing simulation modules...")
+        
+        from run_pipeline import run_simulation_gpu, run_simulation_standard
+        
+        update(10, f"Running Monte Carlo ({iterations} iterations)...")
+        
+        if use_gpu:
+            try:
+                from core.gpu_ballistics import HAS_NUMBA
+                mode = "GPU" if HAS_NUMBA else "CPU (Parallel)"
+                update(15, f"Running {mode} Monte Carlo...")
+            except ImportError:
+                update(15, "Running Monte Carlo...")
+            
+            primary_geo, fragment_geo, sim_time = run_simulation_gpu(
+                iterations, 
+                show_progress=False,
+                launch_lat=launch_lat,
+                launch_lon=launch_lon,
+                azimuth=azimuth,
+                sep_altitude=sep_altitude,
+                sep_velocity=sep_velocity,
+                sep_fp_angle=sep_fp_angle,
+                sep_azimuth=sep_azimuth,
+                dry_mass_kg=rocket_dry_mass,
+                reference_area_m2=rocket_ref_area,
+                hurricane_mode=hurricane_mode,
+            )
+        else:
+            update(15, "Running Standard Monte Carlo...")
+            primary_geo, fragment_geo, sim_time = run_simulation_standard(
+                iterations, 
+                show_progress=False,
+                launch_lat=launch_lat,
+                launch_lon=launch_lon,
+                azimuth=azimuth,
+                sep_altitude=sep_altitude,
+                sep_velocity=sep_velocity,
+                sep_fp_angle=sep_fp_angle,
+                sep_azimuth=sep_azimuth,
+                dry_mass_kg=rocket_dry_mass,
+                reference_area_m2=rocket_ref_area,
+                hurricane_mode=hurricane_mode,
+            )
+        
+        update(50, f"Simulation complete: {len(primary_geo)} primary, {len(fragment_geo)} fragments")
+        
+        # =========================================================================
+        # STEP 2: Filter Outliers (CRITICAL for fragments!)
+        # =========================================================================
+        update(55, "Filtering fragment outliers...")
+        
+        # Only filter fragments, not primary impacts
+        filtered_fragments = filter_outliers_iqr(fragment_geo, factor=1.5)
+        
+        # =========================================================================
+        # STEP 3: Compute Ellipses with Safety Limits
+        # =========================================================================
+        update(60, "Computing dispersion ellipses...")
+        
+        primary_ellipse = compute_ellipse_safe(primary_geo, filter_outliers=False, clamp=True)
+        fragment_ellipse = compute_ellipse_safe(filtered_fragments, filter_outliers=False, clamp=True)
     
-    update(50, f"Simulation complete: {len(primary_geo)} primary, {len(fragment_geo)} fragments")
-    
-    # =========================================================================
-    # STEP 2: Filter Outliers (CRITICAL for fragments!)
-    # =========================================================================
-    update(55, "Filtering fragment outliers...")
-    
-    # Only filter fragments, not primary impacts
-    filtered_fragments = filter_outliers_iqr(fragment_geo, factor=1.5)
-    
-    # =========================================================================
-    # STEP 3: Compute Ellipses with Safety Limits
-    # =========================================================================
-    update(60, "Computing dispersion ellipses...")
-    
-    primary_ellipse = compute_ellipse_safe(primary_geo, filter_outliers=False, clamp=True)
-    fragment_ellipse = compute_ellipse_safe(filtered_fragments, filter_outliers=False, clamp=True)
+    if primary_ellipse:
+        update(65, f"Primary: {primary_ellipse['semi_major_km']:.1f}x{primary_ellipse['semi_minor_km']:.1f} km")
+    if fragment_ellipse:
+        update(70, f"Fragment: {fragment_ellipse['semi_major_km']:.1f}x{fragment_ellipse['semi_minor_km']:.1f} km")
     
     if primary_ellipse:
         update(65, f"Primary: {primary_ellipse['semi_major_km']:.1f}x{primary_ellipse['semi_minor_km']:.1f} km")
@@ -143,6 +233,57 @@ def run_simulation_safe(
     )
     
     update(88, f"Generated {len(grid_cells)} grid cells")
+    
+    # =========================================================================
+    # STEP 4.5: Calculate OTU (NDVI/Relief)
+    # =========================================================================
+    update(89, "Calculating Ecological Indices (GEE)...")
+    
+    # We call the calculator logic here to populate properties in grid_cells
+    try:
+        from otu.calculator import calculate_otu_for_grid
+        
+        # We need to map our GridCell objects to the format expected by calculator 
+        # or have calculator update them in place. 
+        # calculate_otu_for_grid expects List[GridCell] (duck typed or actual objects)
+        # and returns a dict with 'output_path' etc.
+        # Ideally, it UPDATES the objects in place so they have .q_otu, .q_vi etc.
+        
+        # Let's inspect calculate_otu_for_grid -> creates ChunkManager -> runs calculation -> updates chunks (objects).
+        # We need to ensure that the properties are preserved when converting to GeoJSON.
+        # grid_to_geojson reads .q_otu etc from the objects.
+        
+        # Define callback to update UI with OTU sub-steps
+        def otu_progress(msg: str):
+            update(89, f"OTU: {msg}")
+
+        calc_result = calculate_otu_for_grid(
+            grid_cells=grid_cells,
+            target_date=target_date,  # Use date from request
+            output_dir="output/otu",  # Temporary or configured path
+            show_progress=False,      # We handle progress here
+            progress_callback=otu_progress
+        )
+        
+        # CRITICAL FIX: Map calculated chunks back to grid_cells
+        # ChunkManager.from_grid_cells preserves order, so we can zip them.
+        processed_chunks = calc_result.get('chunks', [])
+        if processed_chunks and len(processed_chunks) == len(grid_cells):
+             for cell, chunk in zip(grid_cells, processed_chunks):
+                 if chunk.is_processed:
+                     cell.q_vi = chunk.q_vi
+                     cell.q_si = chunk.q_si
+                     cell.q_bi = chunk.q_bi
+                     cell.q_relief = chunk.q_relief
+                     cell.q_otu = chunk.q_otu
+        
+        # Check stats
+        stats = calc_result.get('statistics', {})
+        update(90, f"OTU Calculated. Mean: {stats.get('mean', 0):.3f}")
+        
+    except Exception as e:
+        print(f"OTU Calculation Failed: {e}")
+        update(90, "OTU Calculation Skipped (Error)")
     
     # =========================================================================
     # STEP 5: Convert to GeoJSON
@@ -176,6 +317,11 @@ def run_simulation_safe(
             "fragment_impacts": len(fragment_geo),
             "filtered_fragments": len(filtered_fragments),
             "grid_cells": len(grid_cells),
+        },
+        date_config={
+            "target_date": target_date,
+            "start_date": start_date,
+            "end_date": end_date,
         }
     )
     

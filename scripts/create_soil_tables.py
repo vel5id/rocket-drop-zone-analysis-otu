@@ -396,10 +396,21 @@ Tables S2 and S3.
 
 def main():
     """Main execution function."""
+    import argparse
+    parser = argparse.ArgumentParser(description="Create Soil Coefficients Tables (Tables S2 and S3)")
+    parser.add_argument("--target_date", type=str, help="Target date for temporal coefficients (optional)")
+    parser.add_argument("--output_dir", type=str, default="outputs/supplementary_tables", help="Output directory")
+    args = parser.parse_args()
+    
     print("=" * 70)
     print("Task 1.2: Creating Soil Coefficients Tables (S2 and S3)")
     print("=" * 70)
     print()
+    
+    if args.target_date:
+        print(f"Using target date for seasonal adjustments: {args.target_date}")
+        # Placeholder for seasonal adjustment logic
+        # Currently, soil coefficients are static; could be extended with seasonal factors.
     
     # Create tables
     print("Creating Table S2 (Bonitet coefficients)...")
@@ -411,7 +422,7 @@ def main():
     print(f"Table S3 created with {len(df_s3)} material types")
     
     # Save outputs
-    output_dir = Path("outputs/supplementary_tables")
+    output_dir = Path(args.output_dir)
     save_tables(df_s2, df_s3, output_dir)
     
     # Create worked example

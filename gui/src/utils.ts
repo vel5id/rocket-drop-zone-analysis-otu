@@ -5,20 +5,32 @@ export function generateEllipsePoints(ellipse: EllipseData, numPoints: number = 
     const points: [number, number][] = [];
     const kmToDegLat = 1 / 111.32;
     const kmToDegLon = 1 / (111.32 * Math.cos((center_lat * Math.PI) / 180));
-    const angleRad = (angle_deg * Math.PI) / 180;
+
+    // Backend provides Azimuth (degrees from North, CW).
+    // Math rotation expects degrees from East, CCW.
+    // Conversion: Math = 90 - Azimuth
+    const mathAngleDeg = 90 - angle_deg;
+    const angleRad = (mathAngleDeg * Math.PI) / 180;
 
     for (let i = 0; i < numPoints; i++) {
         const theta = (2 * Math.PI * i) / numPoints;
         const x = semi_major_km * Math.cos(theta);
         const y = semi_minor_km * Math.sin(theta);
+
+        // Standard 2D rotation
         const xRot = x * Math.cos(angleRad) - y * Math.sin(angleRad);
         const yRot = x * Math.sin(angleRad) + y * Math.cos(angleRad);
+
+        // Map back to Lat/Lon
+        // xRot corresponds to changes in Longitude (East-west)
+        // yRot corresponds to changes in Latitude (North-South)
         points.push([center_lat + yRot * kmToDegLat, center_lon + xRot * kmToDegLon]);
     }
     return points;
 }
 
 export function getOTUColor(value: number): string {
+    if (!Number.isFinite(value)) return 'rgb(128, 128, 128)'; // Gray for invalid
     const clamped = Math.max(0, Math.min(1, value));
     if (clamped < 0.5) {
         const ratio = clamped * 2;

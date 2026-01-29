@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { runSimulation as apiRunSimulation, checkHealth, pollSimulation } from './api';
-import { runMockSimulation } from './mockSimulation';
-import { calculateDistance } from './utils';
 import { GlobalStyles } from './components/common/GlobalStyles';
-import Header from './components/layout/Header';
-import Sidebar from './components/layout/Sidebar';
-import ResultsPanel from './components/layout/ResultsPanel';
 import Footer from './components/layout/Footer';
+import Header from './components/layout/Header';
+import ResultsPanel from './components/layout/ResultsPanel';
+import Sidebar from './components/layout/Sidebar';
 import MapView from './components/map/MapView';
+import { useTrajectoryPreview } from './hooks/useTrajectoryPreview';
+import { runMockSimulation } from './mockSimulation';
 import {
     ActiveLayers,
     EllipseData,
@@ -17,8 +17,10 @@ import {
     ImpactPointProperties,
     OTUCellProperties,
     SimulationConfig,
+    TrajectoryPoint,
     UIStats
 } from './types';
+import { calculateDistance } from './utils';
 
 const LAUNCH_LAT = 45.72341;
 const LAUNCH_LON = 63.32275;
@@ -36,9 +38,9 @@ export default function App() {
     const [cursorCoords, setCursorCoords] = useState({ lat: LAUNCH_LAT, lng: LAUNCH_LON });
     const [mapZoom, setMapZoom] = useState(8);
 
-    const [baseLayer, setBaseLayer] = useState<'satellite' | 'dark' | 'terrain' | 'streets'>('dark');
+    const [baseLayer, setBaseLayer] = useState<'satellite' | 'dark' | 'terrain' | 'streets'>('satellite');
     const [activeLayers, setActiveLayers] = useState<ActiveLayers>({
-        primary: true, fragments: true, points: false, otu: false, ndvi: false, slope: false,
+        primary: true, fragments: true, points: false, otu: false, preview: false, ndvi: false, slope: false,
     });
 
     const [simConfig, setSimConfig] = useState<SimulationConfig>({
@@ -46,7 +48,17 @@ export default function App() {
         use_gpu: true,
         launch_lat: LAUNCH_LAT,
         launch_lon: LAUNCH_LON,
-        azimuth: 45.0
+        azimuth: 45.0,
+        target_date: "2024-09-09",
+        start_date: "2024-01-01",
+        end_date: "2024-12-31",
+        sep_altitude: 43000.0,
+        sep_velocity: 1738.0,
+        sep_fp_angle: 25.0,
+        sep_azimuth: 0.0,
+        zone_id: undefined, // Explicit undefined
+        rocket_dry_mass: 30600.0,
+        rocket_ref_area: 43.0
     });
 
     const [stats, setStats] = useState<UIStats | null>(null);
@@ -54,6 +66,8 @@ export default function App() {
     const [fragmentEllipse, setFragmentEllipse] = useState<EllipseData | undefined>();
     const [impactPoints, setImpactPoints] = useState<GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties> | undefined>();
     const [otuGrid, setOtuGrid] = useState<GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> | undefined>();
+
+    const [previewTrajectory, setPreviewTrajectory] = useState<TrajectoryPoint[]>([]);
 
     const [backendAvailable, setBackendAvailable] = useState<boolean | null>(null);
     const [isDemoMode, setIsDemoMode] = useState(false);
@@ -65,6 +79,21 @@ export default function App() {
             setIsDemoMode(!available);
         });
     }, []);
+
+    // Error handler callback with useCallback to avoid infinite loops
+    const handlePreviewError = useCallback((error: string) => {
+        console.error('Preview error:', error);
+    }, []);
+
+    // Use trajectory preview hook for automatic preview on parameter changes
+    const { isLoading: isPreviewLoading, error: previewError, clearError } = useTrajectoryPreview(
+        simConfig,
+        backendAvailable,
+        activeLayers.preview,
+        setPreviewTrajectory,
+        handlePreviewError,
+        400 // 400ms debounce
+    );
 
     const toggleLayer = (layer: keyof ActiveLayers) => setActiveLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
 
@@ -198,6 +227,7 @@ export default function App() {
                         activeLayers={activeLayers}
                         onCursorMove={(lat, lng) => setCursorCoords({ lat, lng })}
                         baseLayer={baseLayer}
+                        previewTrajectory={previewTrajectory}
                     />
                 </div>
 

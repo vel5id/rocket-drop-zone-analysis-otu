@@ -788,27 +788,32 @@ def main():
     # PRESET ZONE DATA: Ю-24 (Karaganda region)
     # Source: https://adilet.zan.kz/rus/docs/U950002195_
     # =========================================================================
-    YU24_ZONES = {
-        # Zone 15: 47 deg 20'00" N, 66 deg 46'30" E, size 27x18 km, angle ~15 deg (horizontal orientation)
-        "zone_15": {
-            "center_lat": 47 + 20/60,  # 47.333...
-            "center_lon": 66 + 46/60 + 30/3600,  # 66.775
-            "semi_major_km": 27.0,
-            "semi_minor_km": 18.0,
-            "angle_deg": 75.0,  # Adjusted per user request
-        },
-        # Zone 25: 47 deg 14'00" N, 66 deg 23'00" E, size 60x30 km, angle ~75 deg
-        "zone_25": {
-            "center_lat": 47 + 14/60,  # 47.233...
-            "center_lon": 66 + 23/60,  # 66.383...
-            "semi_major_km": 60.0,
-            "semi_minor_km": 30.0,
-            "angle_deg": 75.0,  # Adjusted per user request
-        },
-    }
+    from config.zones import YU24_ZONES
+
+    # Select zones based on preset
+    primary_ellipse = None
+    fragment_ellipse = None
     
-    # Determine if using manual ellipses or shapefiles
-    use_manual_ellipses = args.zone_preset is not None or args.ellipse1 is not None
+    if args.zone_preset == "yu24":
+        print("  [INFO] Using preset zones: Ю-24 (Karaganda)")
+        z15 = YU24_ZONES["yu24_15"]
+        z25 = YU24_ZONES["yu24_25"]
+        
+        primary_ellipse = {
+            "center_lat": z15.center_lat,
+            "center_lon": z15.center_lon,
+            "semi_major_km": z15.semi_major_km,
+            "semi_minor_km": z15.semi_minor_km,
+            "angle_deg": z15.angle_deg,
+        }
+        
+        fragment_ellipse = {
+            "center_lat": z25.center_lat,
+            "center_lon": z25.center_lon,
+            "semi_major_km": z25.semi_major_km,
+            "semi_minor_km": z25.semi_minor_km,
+            "angle_deg": z25.angle_deg,
+        }
     use_shapefiles = args.use_shapefiles and HAS_SHAPEFILE_LOADER
     
     print("\n" + "="*60)

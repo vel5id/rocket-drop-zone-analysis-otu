@@ -59,6 +59,18 @@ def run_simulation_async(
     launch_lat: float = 45.72341,
     launch_lon: float = 63.32275,
     azimuth: float = 45.0,
+    target_date: str = "2024-09-09",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    sep_altitude: float = 43000.0,
+    sep_velocity: float = 1738.0,
+    sep_fp_angle: float = 25.0,
+    sep_azimuth: float = 0.0,
+    zone_id: Optional[str] = None,
+    rocket_dry_mass: float = 30600.0,
+    rocket_ref_area: float = 43.0,
+    hurricane_mode: bool = False,
+    cloud_threshold: int = 30,
 ) -> None:
     """
     Run simulation in background thread using server_pipeline module.
@@ -67,10 +79,25 @@ def run_simulation_async(
     """
     def worker():
         try:
-            update_job(job_id, status="running", progress=0, message="Starting pipeline...")
+            update_job(job_id, status="running", progress=0, message="Initializing pipeline...")
             
             # Import from server_pipeline
             from server_pipeline.simulation import run_simulation_safe
+            from config.otu_config import OTUConfig
+            from scripts.sentinel_table_with_logging import run_extraction
+            from pathlib import Path
+            
+            # 1. Update Cloud Threshold Configuration
+            OTUConfig.gee.cloud_threshold = cloud_threshold
+            
+            # 2. Regenerate Sentinel-2 Tables (if not in mock mode implicitly)
+            update_job(job_id, progress=5, message=f"Regenerating Sentinel tables (<{cloud_threshold}% cloud)...")
+            try:
+                table_output = Path("outputs/supplementary_tables")
+                run_extraction(table_output, cloud_threshold=cloud_threshold, use_mock=False)
+            except Exception as e:
+                print(f"Warning: Sentinel table generation failed: {e}")
+                # Don't fail the whole simulation for report generation failure
             
             # Progress callback to update job status
             def progress_callback(pct: int, msg: str):
@@ -83,6 +110,17 @@ def run_simulation_async(
                 launch_lat=launch_lat,
                 launch_lon=launch_lon,
                 azimuth=azimuth,
+                target_date=target_date,
+                start_date=start_date,
+                end_date=end_date,
+                sep_altitude=sep_altitude,
+                sep_velocity=sep_velocity,
+                sep_fp_angle=sep_fp_angle,
+                sep_azimuth=sep_azimuth,
+                zone_id=zone_id,
+                rocket_dry_mass=rocket_dry_mass,
+                rocket_ref_area=rocket_ref_area,
+                hurricane_mode=hurricane_mode,
                 cell_size_km=1.0,
                 progress_callback=progress_callback,
             )
