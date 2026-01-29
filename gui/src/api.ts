@@ -3,54 +3,13 @@
  * Connects to FastAPI backend at localhost:8000
  */
 
+import {
+    SimulationConfig,
+    SimulationStatus,
+    SimulationResult
+} from './types';
+
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
-
-// ============================================
-// TYPES
-// ============================================
-
-export interface SimulationConfig {
-    iterations: number;
-    use_gpu: boolean;
-    launch_lat: number;
-    launch_lon: number;
-    azimuth: number;
-}
-
-export interface EllipseData {
-    center_lat: number;
-    center_lon: number;
-    semi_major_km: number;
-    semi_minor_km: number;
-    angle_deg: number;
-}
-
-export interface SimulationStats {
-    iterations: number;
-    simulation_time_s: number;
-    primary_impacts: number;
-    fragment_impacts: number;
-    grid_cells: number;
-}
-
-export interface SimulationStatus {
-    job_id: string;
-    status: 'pending' | 'running' | 'completed' | 'failed';
-    progress: number;
-    message?: string; // <--- New field
-}
-
-export interface SimulationResult {
-    job_id: string;
-    status: string;
-    progress: number;
-    primary_ellipse?: EllipseData;
-    fragment_ellipse?: EllipseData;
-    impact_points?: GeoJSON.FeatureCollection;
-    otu_grid?: GeoJSON.FeatureCollection;
-    stats?: SimulationStats;
-    error?: string;
-}
 
 // ============================================
 // API FUNCTIONS
