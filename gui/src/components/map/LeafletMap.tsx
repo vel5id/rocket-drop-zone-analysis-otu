@@ -46,7 +46,7 @@ const ZoomTracker = ({ onZoomChange }: { onZoomChange: (zoom: number) => void })
 const ImpactPointsLayer = React.memo(({ points }: { points: GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties> }) => {
     return (
         <LayerGroup>
-            {points.features.map((f, i) => (
+            {points.features?.map((f, i) => (
                 <CircleMarker
                     key={f.properties.id || i}
                     center={[f.geometry.coordinates[1], f.geometry.coordinates[0]]}
@@ -72,7 +72,7 @@ const ImpactPointsLayer = React.memo(({ points }: { points: GeoJSONFeatureCollec
 const OTULayer = React.memo(({ grid }: { grid: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> }) => {
     return (
         <LayerGroup>
-            {grid.features.map((f, i) => (
+            {grid.features?.map((f, i) => (
                 <Polygon
                     key={f.properties.grid_id || i}
                     positions={f.geometry.coordinates[0].map((c: any) => [c[1], c[0]])}
