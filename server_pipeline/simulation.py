@@ -277,6 +277,14 @@ def run_simulation_safe(
                      cell.q_relief = chunk.q_relief
                      cell.q_otu = chunk.q_otu
         
+        # Verification Log
+        if grid_cells:
+            first_cell = grid_cells[0]
+            if hasattr(first_cell, 'q_otu'):
+                print(f"[Simulation] Verification: Cell 1 has OTU={first_cell.q_otu}")
+            else:
+                print("[Simulation] WARNING: Cell 1 has NO OTU attributes after mapping")
+
         # Check stats
         stats = calc_result.get('statistics', {})
         update(90, f"OTU Calculated. Mean: {stats.get('mean', 0):.3f}")
