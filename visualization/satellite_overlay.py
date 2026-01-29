@@ -3,12 +3,20 @@ from __future__ import annotations
 import os, math, folium, json
 from folium.plugins import HeatMap
 import numpy as np
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 try:
     from gee.authenticator import initialize_ee
 except: 
     def initialize_ee(): pass
+
+try:
+    from gee.fao_soil_zones import fetch_fao_soil_zones, get_bonitet_color
+    HAS_FAO_SOIL = True
+except ImportError:
+    HAS_FAO_SOIL = False
+    def fetch_fao_soil_zones(*args, **kwargs): return None
+    def get_bonitet_color(b): return "#CCCCCC"
 
 
 # Color schemes for different indices
@@ -19,6 +27,93 @@ def _get_otu_color(val):
     if val < 0.50: return '#ff8800'
     if val < 0.75: return '#88ff00'
     return '#00aa00'
+
+
+# ============================================================================
+# RELATIVE NORMALIZATION COLOR FUNCTIONS (continuous gradient based on min/max)
+# ============================================================================
+
+def _interpolate_color(val: float, min_val: float, max_val: float, colors: List[str]) -> str:
+    """Interpolate between colors based on normalized value."""
+    if val is None or (isinstance(val, float) and np.isnan(val)): 
+        return None
+    
+    # Normalize to 0-1
+    if max_val == min_val:
+        norm = 0.5
+    else:
+        norm = (val - min_val) / (max_val - min_val)
+    norm = max(0.0, min(1.0, norm))
+    
+    # Find color segment
+    n_segments = len(colors) - 1
+    segment = int(norm * n_segments)
+    segment = min(segment, n_segments - 1)
+    
+    # Interpolate within segment
+    local_t = (norm * n_segments) - segment
+    
+    c1 = colors[segment]
+    c2 = colors[segment + 1]
+    
+    # Parse hex colors
+    r1, g1, b1 = int(c1[1:3], 16), int(c1[3:5], 16), int(c1[5:7], 16)
+    r2, g2, b2 = int(c2[1:3], 16), int(c2[3:5], 16), int(c2[5:7], 16)
+    
+    # Interpolate
+    r = int(r1 + (r2 - r1) * local_t)
+    g = int(g1 + (g2 - g1) * local_t)
+    b = int(b1 + (b2 - b1) * local_t)
+    
+    return f'#{r:02x}{g:02x}{b:02x}'
+
+
+# Color gradients for relative normalization
+COLOR_GRADIENTS = {
+    'otu': ['#ff0000', '#ff4400', '#ff8800', '#ffcc00', '#88ff00', '#00aa00'],  # Red -> Green
+    'ndvi': ['#8B4513', '#DAA520', '#9ACD32', '#228B22', '#006400'],  # Brown -> Green
+    'q_si': ['#ff0000', '#ff8800', '#ffcc00', '#00aaff', '#0044ff'],  # Red -> Blue
+    'q_bi': ['#888888', '#aa88aa', '#8844aa', '#6622aa', '#440088'],  # Gray -> Purple
+    'q_relief': ['#ff6600', '#ffaa00', '#dddd66', '#44aaaa', '#008888'],  # Orange -> Teal
+    'q_fire': ['#ff0000', '#ff6600', '#aaaa00', '#66aa00', '#00aa00'],  # Red -> Green
+    'slope': ['#00aa00', '#88ff00', '#ffaa00', '#ff6600', '#ff0000'],  # Green -> Red
+    'bonitet': ['#89CFF0', '#FFB6C1', '#90EE90', '#40E0D0'],  # Paper colors
+}
+
+
+def create_relative_color_func(prop_name: str, data_min: float, data_max: float):
+    """Create a color function with relative normalization based on data range."""
+    gradient = COLOR_GRADIENTS.get(prop_name, COLOR_GRADIENTS['otu'])
+    
+    def color_func(val):
+        return _interpolate_color(val, data_min, data_max, gradient)
+    
+    return color_func
+
+
+def compute_data_ranges(geojson_data: Dict) -> Dict[str, Tuple[float, float]]:
+    """Compute min/max for each property in GeoJSON for relative normalization."""
+    ranges = {}
+    
+    if not geojson_data or 'features' not in geojson_data:
+        return ranges
+    
+    # Collect all values for each property
+    prop_values = {}
+    for feat in geojson_data['features']:
+        props = feat.get('properties', {})
+        for key, val in props.items():
+            if isinstance(val, (int, float)) and not (isinstance(val, float) and np.isnan(val)):
+                if key not in prop_values:
+                    prop_values[key] = []
+                prop_values[key].append(val)
+    
+    # Compute ranges
+    for key, values in prop_values.items():
+        if values:
+            ranges[key] = (min(values), max(values))
+    
+    return ranges
 
 def _get_ndvi_color(val):
     """NDVI: Brown (bare) -> Green (vegetated)"""
@@ -71,13 +166,40 @@ def _get_slope_color(val):
     return '#ff0000'                  # Very steep
 
 def _get_aspect_color(val):
-    """Aspect: North=Blue, East=Yellow, South=Red, West=Green"""
+    """Aspect: Smooth color wheel gradient for 8 directions.
+    
+    Uses HSL color wheel where:
+    - N (0°) = Blue (hue=240)
+    - E (90°) = Yellow (hue=60)  
+    - S (180°) = Red (hue=0)
+    - W (270°) = Green (hue=120)
+    
+    Smoothly interpolates between all compass directions.
+    """
     if val is None or (isinstance(val, float) and np.isnan(val)): return None
-    # 0/360=N, 90=E, 180=S, 270=W
-    if val < 45 or val >= 315: return '#0088ff'   # North - blue
-    if val < 135: return '#ffcc00'                 # East - yellow  
-    if val < 225: return '#ff4400'                 # South - red
-    return '#00aa44'                               # West - green
+    
+    # Normalize angle to 0-360
+    angle = val % 360
+    
+    # Map compass angle to hue (color wheel)
+    # N=0° -> Blue (hue=240°)
+    # E=90° -> Yellow (hue=60°)
+    # S=180° -> Red (hue=0°)
+    # W=270° -> Green (hue=120°)
+    # The mapping is: hue = (240 - angle) % 360, but we need smooth wrap
+    
+    # Custom mapping for intuitive compass colors
+    # Shift so N=blue, go clockwise through cyan, green, yellow, orange, red, magenta, back to blue
+    hue = (240 - angle * 0.667) % 360  # Scale and shift for nice gradient
+    
+    # Convert HSL to RGB (saturation=80%, lightness=50%)
+    import colorsys
+    h = hue / 360.0
+    s = 0.75
+    l = 0.5
+    r, g, b = colorsys.hls_to_rgb(h, l, s)
+    
+    return f'#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}'
 
 
 def create_impact_visualization(
@@ -93,8 +215,17 @@ def create_impact_visualization(
     satellite_date="2023-07-15",
     buffer_km=100,
     geojson_path: Optional[str] = None,
+    use_relative_colors: bool = True,  # use continuous gradient based on data range
+    raw_polygons: Optional[List[List[Tuple[float, float]]]] = None,  # Raw shapefile polygons
 ):
-    """Create interactive map with 7 switchable index layers."""
+    """Create interactive map with 7 switchable index layers.
+    
+    Args:
+        use_relative_colors: If True, use continuous color gradient based on 
+                            actual min/max of data. If False, use fixed discrete classes.
+        raw_polygons: List of polygon coordinate lists [(lat, lon), ...] from shapefiles.
+                      If provided, these are drawn instead of ellipse approximations.
+    """
     initialize_ee()
     m = folium.Map(location=[center_lat, center_lon], zoom_start=7, tiles=None)
     
@@ -105,18 +236,29 @@ def create_impact_visualization(
     ).add_to(m)
     folium.TileLayer(tiles="OpenStreetMap", name="Map").add_to(m)
     
-    # Ellipses
-    ellipse_grp = folium.FeatureGroup(name="Ellipses", show=True)
-    if primary_ellipse: _add_ellipse(ellipse_grp, primary_ellipse, "red", "Primary")
-    if fragment_ellipse: _add_ellipse(ellipse_grp, fragment_ellipse, "orange", "Fragments")
-    ellipse_grp.add_to(m)
+    # Zone boundaries (raw polygons or ellipses)
+    zone_grp = folium.FeatureGroup(name="Zone Boundaries", show=True)
+    if raw_polygons:
+        # Use raw shapefile polygons
+        polygon_names = ["Zone 15", "Zone 25"] if len(raw_polygons) >= 2 else [f"Zone {i+1}" for i in range(len(raw_polygons))]
+        polygon_colors = ["red", "orange", "blue", "green"]
+        for i, poly in enumerate(raw_polygons):
+            color = polygon_colors[i % len(polygon_colors)]
+            _add_raw_polygon(zone_grp, poly, color, polygon_names[i] if i < len(polygon_names) else f"Polygon {i+1}")
+    else:
+        # Use ellipse approximations
+        if primary_ellipse: _add_ellipse(zone_grp, primary_ellipse, "red", "Primary")
+        if fragment_ellipse: _add_ellipse(zone_grp, fragment_ellipse, "orange", "Fragments")
+    zone_grp.add_to(m)
     
-    # Impact heatmap
-    heat_grp = folium.FeatureGroup(name="Impact Heatmap", show=True)
-    frag_pts = [[pt["lat"], pt["lon"]] for pt in impact_points if pt.get("is_fragment")]
-    if frag_pts:
-        HeatMap(frag_pts, radius=15, blur=10).add_to(heat_grp)
-    heat_grp.add_to(m)
+    
+    # Impact heatmap (only for Monte Carlo mode, skip for shapefiles)
+    if not raw_polygons:
+        heat_grp = folium.FeatureGroup(name="Impact Heatmap", show=True)
+        frag_pts = [[pt["lat"], pt["lon"]] for pt in impact_points if pt.get("is_fragment")]
+        if frag_pts:
+            HeatMap(frag_pts, radius=15, blur=10).add_to(heat_grp)
+        heat_grp.add_to(m)
     
     # Load GeoJSON data
     geojson_data = None
@@ -145,22 +287,32 @@ def create_impact_visualization(
         geojson_data = {"type": "FeatureCollection", "features": features}
     
     if geojson_data:
-        # Layer definitions: (name, property, color_func, show_by_default)
-        layers = [
-            ("1. OTU Index", "q_otu", _get_otu_color, True),
-            ("2. NDVI", "q_ndvi", _get_ndvi_color, False),
-            ("3. Soil Strength (Q_Si)", "q_si", _get_soil_strength_color, False),
-            ("4. Soil Quality (Q_Bi)", "q_bi", _get_soil_quality_color, False),
-            ("5. Relief (Q_Relief)", "q_relief", _get_relief_color, False),
-            ("6. Fire Risk", "q_fire", _get_fire_risk_color, False),
-            ("7. Slope", "slope", _get_slope_color, False),
-            ("8. Aspect", "aspect", _get_aspect_color, False),
+        # Compute data ranges for relative normalization
+        data_ranges = compute_data_ranges(geojson_data) if use_relative_colors else {}
+        
+        # Property mappings: (name, property, gradient_key, default_fixed_func, show)
+        layer_defs = [
+            ("1. OTU Index", "q_otu", "otu", _get_otu_color, True),
+            ("2. NDVI", "q_ndvi", "ndvi", _get_ndvi_color, False),
+            ("3. Soil Strength (Q_Si)", "q_si", "q_si", _get_soil_strength_color, False),
+            ("4. Soil Quality (Q_Bi)", "q_bi", "q_bi", _get_soil_quality_color, False),
+            ("5. Relief (Q_Relief)", "q_relief", "q_relief", _get_relief_color, False),
+            ("6. Fire Risk", "q_fire", "q_fire", _get_fire_risk_color, False),
+            ("7. Slope", "slope", "slope", _get_slope_color, False),
+            ("8. Aspect", "aspect", "aspect", _get_aspect_color, False),
         ]
         
-        for layer_name, prop_name, color_func, show in layers:
+        for layer_name, prop_name, grad_key, fixed_func, show in layer_defs:
             # Check if property exists in data
             if geojson_data["features"] and prop_name not in geojson_data["features"][0].get("properties", {}):
                 continue
+            
+            # Choose color function based on mode
+            if use_relative_colors and prop_name in data_ranges:
+                min_v, max_v = data_ranges[prop_name]
+                color_func = create_relative_color_func(grad_key, min_v, max_v)
+            else:
+                color_func = fixed_func
             
             layer = folium.GeoJson(
                 geojson_data,
@@ -296,11 +448,18 @@ LEGENDS = {
     """,
     "aspect": """
     <div style="position:fixed;bottom:50px;left:50px;z-index:1000;background:white;padding:15px;border:2px solid grey;border-radius:8px;font-size:12px;">
-    <b style="font-size:14px;">Aspect (Exposure)</b><br><br>
-    <span style="background:#0088ff;color:white;padding:2px 8px;margin:2px;">North (N)</span><br>
-    <span style="background:#ffcc00;padding:2px 8px;margin:2px;">East (E)</span><br>
-    <span style="background:#ff4400;color:white;padding:2px 8px;margin:2px;">South (S)</span><br>
-    <span style="background:#00aa44;color:white;padding:2px 8px;margin:2px;">West (W)</span>
+    <b style="font-size:14px;">Aspect (8 Directions)</b><br><br>
+    <div style="display:flex;flex-wrap:wrap;gap:4px;">
+    <span style="background:#1f5fbf;color:white;padding:2px 8px;border-radius:3px;">N (0°)</span>
+    <span style="background:#3fbfbf;color:white;padding:2px 8px;border-radius:3px;">NE (45°)</span>
+    <span style="background:#5fbf1f;color:white;padding:2px 8px;border-radius:3px;">E (90°)</span>
+    <span style="background:#bfbf1f;padding:2px 8px;border-radius:3px;">SE (135°)</span>
+    <span style="background:#bf5f1f;color:white;padding:2px 8px;border-radius:3px;">S (180°)</span>
+    <span style="background:#bf1f5f;color:white;padding:2px 8px;border-radius:3px;">SW (225°)</span>
+    <span style="background:#5f1fbf;color:white;padding:2px 8px;border-radius:3px;">W (270°)</span>
+    <span style="background:#1f3fbf;color:white;padding:2px 8px;border-radius:3px;">NW (315°)</span>
+    </div>
+    <br><i style="font-size:10px;">Smooth gradient between directions</i>
     </div>
     """
 }
@@ -328,8 +487,12 @@ def create_individual_index_visualizations(
     full_data: Optional[List[Dict[str, float]]] = None,
     output_dir="output/indices",
     geojson_path: Optional[str] = None,
+    raw_polygons: Optional[List[List[Tuple[float, float]]]] = None,  # Raw shapefile polygons
 ) -> List[str]:
     """Create separate HTML files for each index visualization.
+    
+    Args:
+        raw_polygons: If provided, draw real polygon boundaries instead of ellipses.
     
     Returns list of created file paths.
     """
@@ -385,18 +548,26 @@ def create_individual_index_visualizations(
         ).add_to(m)
         folium.TileLayer(tiles="OpenStreetMap", name="Map").add_to(m)
         
-        # Ellipses
-        ellipse_grp = folium.FeatureGroup(name="Ellipses", show=True)
-        if primary_ellipse: _add_ellipse(ellipse_grp, primary_ellipse, "red", "Primary")
-        if fragment_ellipse: _add_ellipse(ellipse_grp, fragment_ellipse, "orange", "Fragments")
-        ellipse_grp.add_to(m)
+        # Zone boundaries (raw polygons or ellipses)
+        zone_grp = folium.FeatureGroup(name="Zone Boundaries", show=True)
+        if raw_polygons:
+            polygon_names = ["Zone 15", "Zone 25"] if len(raw_polygons) >= 2 else [f"Zone {i+1}" for i in range(len(raw_polygons))]
+            polygon_colors = ["red", "orange", "blue", "green"]
+            for i, poly in enumerate(raw_polygons):
+                color = polygon_colors[i % len(polygon_colors)]
+                _add_raw_polygon(zone_grp, poly, color, polygon_names[i] if i < len(polygon_names) else f"Polygon {i+1}")
+        else:
+            if primary_ellipse: _add_ellipse(zone_grp, primary_ellipse, "red", "Primary")
+            if fragment_ellipse: _add_ellipse(zone_grp, fragment_ellipse, "orange", "Fragments")
+        zone_grp.add_to(m)
         
-        # Impact heatmap
-        heat_grp = folium.FeatureGroup(name="Impact Heatmap", show=True)
-        frag_pts = [[pt["lat"], pt["lon"]] for pt in impact_points if pt.get("is_fragment")]
-        if frag_pts:
-            HeatMap(frag_pts, radius=15, blur=10).add_to(heat_grp)
-        heat_grp.add_to(m)
+        # Impact heatmap (only for Monte Carlo mode, skip for shapefiles)
+        if not raw_polygons:
+            heat_grp = folium.FeatureGroup(name="Impact Heatmap", show=True)
+            frag_pts = [[pt["lat"], pt["lon"]] for pt in impact_points if pt.get("is_fragment")]
+            if frag_pts:
+                HeatMap(frag_pts, radius=15, blur=10).add_to(heat_grp)
+            heat_grp.add_to(m)
         
         # Index layer
         layer = folium.GeoJson(
@@ -582,3 +753,205 @@ def _add_ellipse(grp, ellipse, color, name, npts=64):
     folium.Polygon(coords, color=color, weight=3, fill=False, popup=popup_text).add_to(grp)
     folium.Marker([clat, clon], popup=f"{name} Center", 
                   icon=folium.Icon(color="red" if "Primary" in name else "orange")).add_to(grp)
+
+
+def _add_raw_polygon(grp, polygon_coords, color, name, fill=False):
+    """
+    Add a raw polygon from shapefile coordinates (no PCA ellipse conversion).
+    
+    Args:
+        grp: Folium FeatureGroup to add to
+        polygon_coords: List of (lat, lon) tuples from shapefile
+        color: Polygon border color
+        name: Name for popup
+        fill: Whether to fill the polygon
+    """
+    # Convert to folium format [lat, lon]
+    coords = [[pt[0], pt[1]] for pt in polygon_coords]
+    
+    # Calculate center for marker
+    center_lat = np.mean([pt[0] for pt in polygon_coords])
+    center_lon = np.mean([pt[1] for pt in polygon_coords])
+    
+    # Calculate approximate area
+    # Simple shoelace formula approximation
+    n = len(polygon_coords)
+    area_km2 = 0
+    for i in range(n):
+        j = (i + 1) % n
+        lat1, lon1 = polygon_coords[i]
+        lat2, lon2 = polygon_coords[j]
+        # Convert to km
+        x1 = lon1 * 111 * np.cos(np.radians(center_lat))
+        y1 = lat1 * 111
+        x2 = lon2 * 111 * np.cos(np.radians(center_lat))
+        y2 = lat2 * 111
+        area_km2 += x1 * y2 - x2 * y1
+    area_km2 = abs(area_km2) / 2
+    
+    popup_text = f"{name}: ~{area_km2:.0f} km²"
+    folium.Polygon(
+        coords, 
+        color=color, 
+        weight=3, 
+        fill=fill,
+        fillColor=color,
+        fillOpacity=0.2 if fill else 0,
+        popup=popup_text
+    ).add_to(grp)
+    
+    folium.Marker(
+        [center_lat, center_lon], 
+        popup=f"{name} Center",
+        icon=folium.Icon(color="red" if "15" in name or "Primary" in name else "orange")
+    ).add_to(grp)
+
+
+def create_fao_soil_visualization(
+    center_lat: float,
+    center_lon: float,
+    primary_ellipse: Optional[Dict] = None,
+    fragment_ellipse: Optional[Dict] = None,
+    impact_points: Optional[List[Dict]] = None,
+    output_path: str = "output/fao_soil_zones.html",
+    cache_dir: str = "output/gee_cache",
+    use_mock: bool = False,
+) -> str:
+    """
+    Create visualization with FAO soil zone polygons like the paper's 'Картограмма бонитета почв'.
+    
+    This produces irregular zone polygons colored by bonitet (soil fertility) class:
+    - Light blue: 0-5 bonitet (21% of Yu-24 zone - saline soils)
+    - Pink: 5.1-10 bonitet (27% - calcisols)
+    - Light green: 10.1-15 bonitet (50% - kastanozems)
+    - Turquoise: 15.1-20 bonitet (2% - chernozems)
+    
+    Args:
+        center_lat, center_lon: Map center coordinates
+        primary_ellipse: Primary stage dispersion ellipse
+        fragment_ellipse: Fragment dispersion ellipse  
+        impact_points: Monte Carlo impact points
+        output_path: Path for output HTML file
+        cache_dir: Cache directory for soil data
+        use_mock: Force use of mock data (for testing)
+        
+    Returns:
+        Path to created HTML file
+    """
+    initialize_ee()
+    
+    # Determine bounding box from ellipses
+    if primary_ellipse:
+        # Calculate bbox from ellipse extent
+        a_km = max(primary_ellipse.get("semi_major_km", 50), 
+                   fragment_ellipse.get("semi_major_km", 30) if fragment_ellipse else 30)
+        lat_deg = a_km / 111.0
+        lon_deg = a_km / (111.0 * math.cos(math.radians(center_lat)))
+        
+        min_lat = center_lat - lat_deg * 1.2
+        max_lat = center_lat + lat_deg * 1.2
+        min_lon = center_lon - lon_deg * 1.2
+        max_lon = center_lon + lon_deg * 1.2
+    else:
+        # Default bbox around center (~ 100km)
+        min_lat, max_lat = center_lat - 1, center_lat + 1
+        min_lon, max_lon = center_lon - 1.5, center_lon + 1.5
+    
+    bbox = (min_lat, min_lon, max_lat, max_lon)
+    
+    # Fetch FAO soil zones
+    print(f"\n[FAO Soil Zones] Fetching for bbox: {bbox}")
+    if use_mock or not HAS_FAO_SOIL:
+        from gee.fao_soil_zones import _generate_mock_soil_zones
+        soil_data = _generate_mock_soil_zones(bbox)
+    else:
+        soil_data = fetch_fao_soil_zones(bbox, scale_m=1000, cache_dir=cache_dir)
+    
+    if not soil_data:
+        print("  [WARN] No soil data available")
+        return None
+    
+    # Create map
+    m = folium.Map(location=[center_lat, center_lon], zoom_start=7, tiles=None)
+    
+    # Base layers
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri", name="Satellite"
+    ).add_to(m)
+    folium.TileLayer(tiles="OpenStreetMap", name="Map").add_to(m)
+    
+    # FAO Soil Zones layer
+    soil_group = folium.FeatureGroup(name="Soil Bonitet Zones (FAO)", show=True)
+    
+    folium.GeoJson(
+        soil_data,
+        name="Soil Zones",
+        style_function=lambda f: {
+            'fillColor': f['properties'].get('color', '#CCCCCC'),
+            'color': '#333333',
+            'weight': 1,
+            'fillOpacity': 0.7,
+        },
+        tooltip=folium.GeoJsonTooltip(
+            fields=['soil_name', 'bonitet', 'stability_class'],
+            aliases=['Тип почвы:', 'Бонитет:', 'Устойчивость:'],
+            localize=True
+        )
+    ).add_to(soil_group)
+    soil_group.add_to(m)
+    
+    # Ellipses overlay
+    if primary_ellipse or fragment_ellipse:
+        ellipse_grp = folium.FeatureGroup(name="Dispersion Ellipses", show=True)
+        if primary_ellipse:
+            _add_ellipse(ellipse_grp, primary_ellipse, "red", "Primary 3σ")
+        if fragment_ellipse:
+            _add_ellipse(ellipse_grp, fragment_ellipse, "orange", "Fragments 3σ")
+        ellipse_grp.add_to(m)
+    
+    # Impact heatmap (if points provided)
+    if impact_points:
+        heat_grp = folium.FeatureGroup(name="Impact Heatmap", show=False)
+        pts = [[pt["lat"], pt["lon"]] for pt in impact_points if pt.get("is_fragment")]
+        if pts:
+            HeatMap(pts, radius=15, blur=10).add_to(heat_grp)
+        heat_grp.add_to(m)
+    
+    # Legend matching paper's style
+    legend_html = """
+    <div style="position:fixed;bottom:50px;left:50px;z-index:1000;background:white;padding:15px;border:2px solid grey;border-radius:8px;font-size:11px;max-width:280px;">
+    <b style="font-size:14px;">Картограмма бонитета почв</b><br>
+    <i>Зона Ю-24 (Soil Bonitet Map)</i>
+    <hr style="margin:8px 0;">
+    
+    <b>Балл бонитета:</b><br>
+    <span style="background:#89CFF0;padding:2px 12px;margin:2px;display:inline-block;">от 0 до 5.0</span>
+    <span style="font-size:10px;">(S=540 кв.км – 21%)</span><br>
+    
+    <span style="background:#FFB6C1;padding:2px 12px;margin:2px;display:inline-block;">от 5.1 до 10.0</span>
+    <span style="font-size:10px;">(S=628 кв.км – 27%)</span><br>
+    
+    <span style="background:#90EE90;padding:2px 12px;margin:2px;display:inline-block;">от 10.1 до 15.0</span>
+    <span style="font-size:10px;">(S=570 кв.км – 50%)</span><br>
+    
+    <span style="background:#40E0D0;padding:2px 12px;margin:2px;display:inline-block;">от 15.1 до 20.0</span>
+    <span style="font-size:10px;">(S=39 кв.км – 2%)</span>
+    
+    <hr style="margin:8px 0;">
+    <i style="font-size:10px;">Источник: FAO HWSD v2.0<br>
+    Масштаб: 1:1,000,000</i>
+    </div>
+    """
+    m.get_root().html.add_child(folium.Element(legend_html))
+    
+    # Layer control
+    folium.LayerControl(collapsed=False).add_to(m)
+    
+    # Save
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    m.save(output_path)
+    print(f"  [SAVED] FAO soil zones map: {output_path}")
+    
+    return output_path
+

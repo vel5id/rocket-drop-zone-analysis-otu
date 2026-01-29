@@ -8,16 +8,22 @@ import numpy as np
 
 try:
     from tqdm import tqdm
+    import sys
+    # Умный tqdm: отключается в неинтерактивном режиме
+    def smart_tqdm(iterable, **kwargs):
+        if not sys.stdout.isatty():
+            # Неинтерактивный режим - отключаем прогресс-бар
+            kwargs['disable'] = True
+        return tqdm(iterable, **kwargs)
 except ImportError:
-    # Fallback if tqdm not installed
-    def tqdm(iterable, **kwargs):
+    def smart_tqdm(iterable, **kwargs):
         desc = kwargs.get('desc', '')
         if desc:
             print(f"  {desc}...")
         return iterable
 
 from config.rocket_params import PROTON_STAGE_ONE
-from config.simulation_config import build_default_config, PROTON_FRAGMENTATION
+from config.simulation_config import build_default_config, PROTON_FRAGMENTATION, HURRICANE_PERTURBATIONS
 from core.aerodynamics import proton_drag_coefficient
 from core.ballistics import BallisticModel
 from core.monte_carlo import MonteCarloSimulator, collect_impacts, separate_primary_and_fragments
@@ -32,14 +38,40 @@ LAUNCH_LON = 63.32275
 NOMINAL_AZIMUTH = 45.0
 
 
-def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tuple[list, list, float]:
+def run_simulation_gpu(
+    iterations: int = 1000, 
+    show_progress: bool = True,
+    launch_lat: float = LAUNCH_LAT,
+    launch_lon: float = LAUNCH_LON,
+    azimuth: float = NOMINAL_AZIMUTH,
+    sep_altitude: float = 43000.0,
+    sep_velocity: float = 1738.0,
+    sep_fp_angle: float = 25.0,
+    sep_azimuth: float = 0.0,
+    dry_mass_kg: float = 30600.0,
+    reference_area_m2: float = 43.0,
+    hurricane_mode: bool = False,
+) -> tuple[list, list, float]:
     """Run simulation with GPU acceleration. Returns (primary_geo, fragment_geo, elapsed_time)."""
     try:
         from core.gpu_ballistics import propagate_batch, check_gpu_available, HAS_NUMBA
         
         if not HAS_NUMBA:
             print("  Numba not available, falling back to standard simulation")
-            return run_simulation_standard(iterations, show_progress)
+            return run_simulation_standard(
+                iterations, 
+                show_progress,
+                launch_lat=launch_lat,
+                launch_lon=launch_lon,
+                azimuth=azimuth,
+                sep_altitude=sep_altitude,
+                sep_velocity=sep_velocity,
+                sep_fp_angle=sep_fp_angle,
+                sep_azimuth=sep_azimuth,
+                dry_mass_kg=dry_mass_kg,
+                reference_area_m2=reference_area_m2,
+                hurricane_mode=hurricane_mode,
+            )
         
         print(f"Running GPU/parallel Monte Carlo ({iterations} iterations)...")
         if check_gpu_available():
@@ -48,6 +80,10 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
             print("  Using CPU parallel (Numba)")
         
         config = build_default_config()
+        if hurricane_mode:
+            print("  [WARNING] HURRICANE MODE ACTIVE: Using high-entropy perturbation profile")
+            config.perturbations = HURRICANE_PERTURBATIONS.copy()
+            
         rng = np.random.default_rng(config.random_seed)
         
         # Generate all initial states
@@ -57,19 +93,28 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         
         gen_iter = range(iterations)
         if show_progress:
-            gen_iter = tqdm(gen_iter, desc="Generating states", leave=False)
+            gen_iter = smart_tqdm(gen_iter, desc="Generating states", leave=False)
+        
+        # Convert relative azimuth to absolute
+        abs_azimuth = azimuth + sep_azimuth
         
         for i in gen_iter:
-            initial_states[i] = [0.0, 0.0, rng.normal(43000, 2000), rng.normal(1738, 150),
-                                 np.radians(rng.normal(25, 4)), np.radians(rng.normal(0, 3))]
+            initial_states[i] = [
+                0.0, 
+                0.0, 
+                rng.normal(sep_altitude, 2000), 
+                rng.normal(sep_velocity, 150),
+                np.radians(rng.normal(sep_fp_angle, 4)), 
+                np.radians(rng.normal(0, 3))
+            ]
             params[i] = [rng.normal(1.0, 0.12), rng.normal(0, 40), rng.normal(0, 40),
-                        rng.normal(30600, 500), rng.uniform(0.7, 1.5)]
+                        rng.normal(dry_mass_kg, 500), rng.uniform(0.7, 1.5)]
         
         print("  Propagating trajectories...")
         start_time = time.time()
         results = propagate_batch(initial_states, params, dt=0.5, max_steps=1200,
-                                  reference_area=PROTON_STAGE_ONE.reference_area_m2,
-                                  base_mass=PROTON_STAGE_ONE.dry_mass_kg, use_gpu=True)
+                                  reference_area=reference_area_m2,
+                                  base_mass=dry_mass_kg, use_gpu=True)
         elapsed = time.time() - start_time
         print(f"  Propagation: {elapsed:.2f}s ({iterations/elapsed:.0f} traj/sec)")
         
@@ -78,10 +123,10 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         primary_geo = []
         conv_iter = range(iterations)
         if show_progress:
-            conv_iter = tqdm(conv_iter, desc="Converting primary", leave=False)
+            conv_iter = smart_tqdm(conv_iter, desc="Converting primary", leave=False)
         
         for i in conv_iter:
-            pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, results[i, 0], results[i, 1])
+            pt = meters_to_latlon(launch_lat, launch_lon, abs_azimuth, results[i, 0], results[i, 1])
             primary_geo.append({'lat': pt.lat, 'lon': pt.lon, 'is_fragment': False, 'velocity': results[i, 3]})
         
         # Generate fragments
@@ -91,7 +136,7 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         
         frag_iter = range(iterations)
         if show_progress:
-            frag_iter = tqdm(frag_iter, desc="Generating fragments", leave=False)
+            frag_iter = smart_tqdm(frag_iter, desc="Generating fragments", leave=False)
         
         for i in frag_iter:
             if rng.random() > frag_params.breakup_probability:
@@ -106,7 +151,7 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
             for f in range(num_frags):
                 spread_dr = rng.normal(0, 15000)
                 spread_cr = rng.normal(0, 12000)
-                pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, base_dr + spread_dr, base_cr + spread_cr)
+                pt = meters_to_latlon(launch_lat, launch_lon, abs_azimuth, base_dr + spread_dr, base_cr + spread_cr)
                 fragment_geo.append({'lat': pt.lat, 'lon': pt.lon, 'is_fragment': True, 'fragment_id': f})
         
         print(f"  Primary: {len(primary_geo)}, Fragments: {len(fragment_geo)}")
@@ -117,16 +162,41 @@ def run_simulation_gpu(iterations: int = 1000, show_progress: bool = True) -> tu
         return run_simulation_standard(iterations, show_progress)
 
 
-def run_simulation_standard(iterations: int = 1000, show_progress: bool = True) -> tuple[list, list, float]:
+def run_simulation_standard(
+    iterations: int = 1000, 
+    show_progress: bool = True,
+    launch_lat: float = LAUNCH_LAT,
+    launch_lon: float = LAUNCH_LON,
+    azimuth: float = NOMINAL_AZIMUTH,
+    sep_altitude: float = 43000.0,
+    sep_velocity: float = 1738.0,
+    sep_fp_angle: float = 25.0,
+    sep_azimuth: float = 0.0,
+    dry_mass_kg: float = 30600.0,
+    reference_area_m2: float = 43.0,
+    hurricane_mode: bool = False,
+) -> tuple[list, list, float]:
     """Standard CPU simulation with progress bars."""
     print(f"Running standard Monte Carlo ({iterations} iterations)...")
     
     config = build_default_config()
+    if hurricane_mode:
+        print("  [WARNING] HURRICANE MODE ACTIVE: Using high-entropy perturbation profile")
+        config.perturbations = HURRICANE_PERTURBATIONS.copy()
+        
     config.iterations = iterations
     
+    # Update config with user parameters
+    config.altitude_mean = sep_altitude
+    config.velocity_mean = sep_velocity
+    config.flight_path_angle_mean = sep_fp_angle
+    
+    # Absolute azimuth
+    abs_azimuth = azimuth + sep_azimuth
+    
     model = BallisticModel(
-        reference_area_m2=PROTON_STAGE_ONE.reference_area_m2,
-        dry_mass_kg=PROTON_STAGE_ONE.dry_mass_kg,
+        reference_area_m2=reference_area_m2,
+        dry_mass_kg=dry_mass_kg,
         drag_coefficient_provider=proton_drag_coefficient,
     )
     
@@ -137,7 +207,7 @@ def run_simulation_standard(iterations: int = 1000, show_progress: bool = True) 
     impacts = []
     sim_iter = simulator.run()
     if show_progress:
-        sim_iter = tqdm(sim_iter, total=iterations * 5, desc="Simulating", leave=False)  # ~5 fragments per primary
+        sim_iter = smart_tqdm(sim_iter, total=iterations * 5, desc="Simulating", leave=False)  # ~5 fragments per primary
     
     for impact in sim_iter:
         impacts.append(impact)
@@ -152,18 +222,18 @@ def run_simulation_standard(iterations: int = 1000, show_progress: bool = True) 
     print("  Converting to geographic coordinates...")
     primary_geo = []
     if show_progress:
-        primary = tqdm(primary, desc="Converting primary", leave=False)
+        primary = smart_tqdm(primary, desc="Converting primary", leave=False)
     for imp in primary:
-        pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, imp.downrange_m, imp.crossrange_m)
+        pt = meters_to_latlon(launch_lat, launch_lon, abs_azimuth, imp.downrange_m, imp.crossrange_m)
         primary_geo.append({'lat': pt.lat, 'lon': pt.lon, 'is_fragment': False, 'velocity': imp.impact_velocity_m_s})
     
     fragment_geo = []
     if show_progress:
-        fragments_iter = tqdm(fragments, desc="Converting fragments", leave=False)
+        fragments_iter = smart_tqdm(fragments, desc="Converting fragments", leave=False)
     else:
         fragments_iter = fragments
     for imp in fragments_iter:
-        pt = meters_to_latlon(LAUNCH_LAT, LAUNCH_LON, NOMINAL_AZIMUTH, imp.downrange_m, imp.crossrange_m)
+        pt = meters_to_latlon(launch_lat, launch_lon, abs_azimuth, imp.downrange_m, imp.crossrange_m)
         fragment_geo.append({'lat': pt.lat, 'lon': pt.lon, 'is_fragment': True, 'fragment_id': imp.fragment_id})
     
     return primary_geo, fragment_geo, elapsed
@@ -246,15 +316,15 @@ def run_pipeline(
     fragment_ellipse = compute_ellipse_from_geo(fragment_geo) if fragment_geo else None
     
     print(f"\n  PRIMARY ELLIPSE:")
-    print(f"    Center: ({primary_ellipse['center_lat']:.4f}°N, {primary_ellipse['center_lon']:.4f}°E)")
+    print(f"    Center: ({primary_ellipse['center_lat']:.4f} deg N, {primary_ellipse['center_lon']:.4f} deg E)")
     print(f"    Size:   {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km")
-    print(f"    Angle:  {primary_ellipse['angle_deg']:.1f}° from North")
+    print(f"    Angle:  {primary_ellipse['angle_deg']:.1f} deg from North")
     
     if fragment_ellipse:
         print(f"\n  FRAGMENT ELLIPSE:")
-        print(f"    Center: ({fragment_ellipse['center_lat']:.4f}°N, {fragment_ellipse['center_lon']:.4f}°E)")
+        print(f"    Center: ({fragment_ellipse['center_lat']:.4f} deg N, {fragment_ellipse['center_lon']:.4f} deg E)")
         print(f"    Size:   {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km")
-        print(f"    Angle:  {fragment_ellipse['angle_deg']:.1f}° from North")
+        print(f"    Angle:  {fragment_ellipse['angle_deg']:.1f} deg from North")
     
     # Generate grid INSIDE ellipse polygons
     print("\n[Step 3/6] Generating analysis grid inside ellipse polygons...")
@@ -350,9 +420,9 @@ def run_pipeline(
     print("PIPELINE COMPLETE")
     print("="*60)
     print(f"  Simulation time: {sim_time:.2f}s")
-    print(f"  Primary ellipse: {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km @ {primary_ellipse['angle_deg']:.0f}°")
+    print(f"  Primary ellipse: {primary_ellipse['semi_major_km']:.1f} x {primary_ellipse['semi_minor_km']:.1f} km @ {primary_ellipse['angle_deg']:.0f} deg")
     if fragment_ellipse:
-        print(f"  Fragment ellipse: {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km @ {fragment_ellipse['angle_deg']:.0f}°")
+        print(f"  Fragment ellipse: {fragment_ellipse['semi_major_km']:.1f} x {fragment_ellipse['semi_minor_km']:.1f} km @ {fragment_ellipse['angle_deg']:.0f} deg")
     print(f"  Output: {output_dir}/")
     
     return summary

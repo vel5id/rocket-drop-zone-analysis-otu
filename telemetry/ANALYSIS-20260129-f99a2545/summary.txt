@@ -1,0 +1,18 @@
+Analysis ID: ANALYSIS-20260129-f99a2545
+Generated: 2026-01-29T19:35:53.800560
+==================================================
+SIMULATION CONFIGURATION
+==================================================
+target_date: 2024-09-09
+start_date: None
+end_date: None
+iterations: 100
+use_gpu: True
+launch_lat: 45.72341
+launch_lon: 63.32275
+azimuth: 45.0
+sep_altitude: 43000.0
+sep_velocity: 1738.0
+sep_fp_angle: 25.0
+sep_azimuth: 0.0
+==================================================

@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Additional custom styles */
+:root {
+    --bg-space: #050a10;
+    --accent-cyan: #06b6d4;
+    --font-tech: 'Rajdhani', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+}

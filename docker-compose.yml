@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: rocket-analysis-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      # Google Earth Engine credentials (optional)
+      - EE_ACCOUNT=${EE_ACCOUNT:-}
+      - EE_PRIVATE_KEY=${EE_PRIVATE_KEY:-}
+      - EE_TOKEN=${EE_TOKEN:-}
+    volumes:
+      # Mount data directories for persistence
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./logs:/app/logs
+      # Mount source code for development (comment out for production)
+      - ./api:/app/api
+      - ./core:/app/core
+      - ./server_pipeline:/app/server_pipeline
+      - ./otu:/app/otu
+      - ./grid:/app/grid
+      - ./indices:/app/indices
+      - ./gee:/app/gee
+    networks:
+      - rocket-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # Frontend UI Service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: rocket-analysis-frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - rocket-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  # Development Frontend (optional, for hot-reload)
+  frontend-dev:
+    image: node:20-alpine
+    container_name: rocket-analysis-frontend-dev
+    working_dir: /app
+    command: npm run dev -- --host 0.0.0.0
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./gui:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    networks:
+      - rocket-network
+    profiles:
+      - dev
+    depends_on:
+      - backend
+
+networks:
+  rocket-network:
+    driver: bridge
+    name: rocket-analysis-network
+
+volumes:
+  data:
+    name: rocket-analysis-data
+  outputs:
+    name: rocket-analysis-outputs
+  logs:
+    name: rocket-analysis-logs

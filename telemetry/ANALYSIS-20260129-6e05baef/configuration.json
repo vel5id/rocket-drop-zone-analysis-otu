@@ -1,0 +1,22 @@
+{
+  "analysis_id": "ANALYSIS-20260129-6e05baef",
+  "timestamp": "2026-01-29T19:33:25.867600",
+  "config": {
+    "iterations": 100,
+    "use_gpu": true,
+    "launch_lat": 45.72341,
+    "launch_lon": 63.32275,
+    "azimuth": 77.0,
+    "target_date": "2024-09-09",
+    "start_date": null,
+    "end_date": null,
+    "sep_altitude": 43000.0,
+    "sep_velocity": 1738.0,
+    "sep_fp_angle": 25.0,
+    "sep_azimuth": 0.0,
+    "zone_id": "manual",
+    "rocket_dry_mass": 30600.0,
+    "rocket_ref_area": 43.0,
+    "hurricane_mode": false
+  }
+}

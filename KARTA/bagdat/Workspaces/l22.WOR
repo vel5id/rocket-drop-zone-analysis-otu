@@ -1,0 +1,44 @@
+!Workspace
+!Version 600
+!Charset WindowsCyrillic
+Open Table "C:\bagdat\poly\l33_poly" As l33_poly Interactive
+Open Table "200000_.TAB" As _200000_
+Open Table "эллипс50км" As эллипс50км Interactive
+Open Table "25" As _25 Interactive
+Open Table "500000__.TAB" As _500000__ Interactive
+Open Table "Без цвета" As Без_цвета Interactive
+Open Table "15" As _15 Interactive
+Open Table "В цвете200000" As В_цвете200000 Interactive
+Open Table "Rigtoput" As Rigtoput Interactive
+Open Table "В цвете" As В_цвете Interactive
+Open Table "над_1" As над_1
+Map From l33_poly,_200000_ 
+  Position (0.0520833,0.0520833) Units "in"
+  Width 5.29167 Units "in" Height 3.23958 Units "in" 
+Set Window FrontWindow() ScrollBars Off Autoscroll On Snap Mode On
+Set Map
+  CoordSys Earth Projection 8, 1001, "m", 69, 0, 1, 12500000, 0
+  Center (12314913.48,5208198.7)
+  Zoom 108.6362363 Units "km"
+  Preserve Zoom Display Zoom
+  Distance Units "km" Area Units "sq km" XY Units "m"
+  Distance Type Spherical
+Set Map
+  Layer 1
+    Display Graphic
+    Label Line None Position Center Font ("Arial Cyr",0,9,0) Pen (1,2,0) 
+      With AREA
+      Parallel On Auto Off Overlap Off Duplicates On Offset 2
+      Visibility On
+  Layer 2
+    Display Graphic
+    Selectable Off
+    Zoom (0.65, 260) Units "km" 
+Set Map Layer 1 Editable
+Set Window FrontWindow() Printer
+ Name "HPDJ450c" Orientation Portrait Copies 1
+ Papersize 268
+Dim WorkspaceMaximizedWindow As Integer
+WorkspaceMaximizedWindow = Frontwindow()
+Set Window WorkspaceMaximizedWindow Max
+Undim WorkspaceMaximizedWindow

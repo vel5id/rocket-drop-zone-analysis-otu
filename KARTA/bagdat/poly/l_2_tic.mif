@@ -1,0 +1,19 @@
+Version 300
+Charset "WindowsCyrillic"
+Coordsys NonEarth
+    Units "m"
+    Bounds (12255875.250000, 5207830.500000) (12362283.750000, 5265905.500000)
+
+columns 3
+    IDTIC integer
+    XTIC float
+    YTIC float
+data
+point 12269063.000000 5260810.500000
+  Symbol(32, 0, 9)
+point 12352818.000000 5258396.500000
+  Symbol(32, 0, 9)
+point 12350887.000000 5207830.500000
+  Symbol(32, 0, 9)
+point 12267857.000000 5210364.500000
+  Symbol(32, 0, 9)

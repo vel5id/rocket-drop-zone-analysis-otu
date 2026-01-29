@@ -39,22 +39,45 @@ class SimulationConfig:
 # =============================================================================
 
 DEFAULT_PERTURBATIONS: Dict[str, Perturbation] = {
-    # Separation conditions
-    "initial_velocity": Perturbation("normal", (1_738.0, 150.0)),      # σ=150 m/s (~8% of velocity)
-    "initial_altitude": Perturbation("normal", (43_000.0, 2_000.0)),   # σ=2 km altitude variation
-    "flight_path_angle": Perturbation("normal", (25.0, 4.0)),          # σ=4° flight path angle
-    "azimuth": Perturbation("normal", (45.0, 3.0)),                    # σ=3° azimuth deviation
+    # STANDARD ENGINEERING TOLERANCES (Inertial Guidance System Active)
+    # ------------------------------------------------------------------
+    # "Tight" ellipses representing nominal dispersion (High Precision)
+    "initial_velocity": Perturbation("normal", (1_738.0, 5.0)),        # σ=5 m/s (Very precise cutoff)
+    "initial_altitude": Perturbation("normal", (43_000.0, 200.0)),     # σ=200 m
+    "flight_path_angle": Perturbation("normal", (25.0, 0.2)),          # σ=0.2° (High precision guidance)
+    "azimuth": Perturbation("normal", (45.0, 0.3)),                    # σ=0.3° (Standard IGS accuracy)
     
-    # Aerodynamic uncertainties
-    "drag_coefficient": Perturbation("uniform", (0.7, 1.5)),           # Wide Cd uncertainty (tumbling)
-    "air_density_factor": Perturbation("normal", (1.0, 0.12)),         # σ=12% density variation
+    # Aerodynamics
+    "drag_coefficient": Perturbation("uniform", (0.95, 1.05)),         # ±5% Cd
+    "air_density_factor": Perturbation("normal", (1.0, 0.03)),         # σ=3% density (Standard Atmo)
     
-    # Wind field (high-altitude winds can be very strong)
-    "wind_u": Perturbation("normal", (0.0, 40.0)),                     # σ=40 m/s along-track wind
-    "wind_v": Perturbation("normal", (0.0, 40.0)),                     # σ=40 m/s cross-track wind
+    # Wind (Nominal)
+    "wind_u": Perturbation("normal", (0.0, 10.0)),                     # σ=10 m/s along-track
+    "wind_v": Perturbation("normal", (0.0, 5.0)),                      # σ=5 m/s cross-track (Reduced for thinner ellipses)
     
-    # Mass variation (residual propellant uncertainty)
-    "initial_mass": Perturbation("normal", (30_600.0, 500.0)),         # σ=500 kg (~1.6%)
+    # Mass
+    "initial_mass": Perturbation("normal", (30_600.0, 100.0)),         # σ=100 kg
+}
+
+HURRICANE_PERTURBATIONS: Dict[str, Perturbation] = {
+    # HIGH ENTROPY / FAILURE MODE (Tumbling / Hurricane)
+    # ------------------------------------------------------------------
+    # "Wide" ellipses representing worst-case scenarios
+    "initial_velocity": Perturbation("normal", (1_738.0, 80.0)),       # σ=80 m/s
+    "initial_altitude": Perturbation("normal", (43_000.0, 1_500.0)),   # σ=1.5 km
+    "flight_path_angle": Perturbation("normal", (25.0, 3.0)),          # σ=3°
+    "azimuth": Perturbation("normal", (45.0, 6.0)),                    # σ=6° (Large deviation)
+    
+    # Aerodynamics
+    "drag_coefficient": Perturbation("uniform", (0.7, 1.5)),           # Wide Cd (Tumbling)
+    "air_density_factor": Perturbation("normal", (1.0, 0.12)),         # σ=12% density
+    
+    # Wind (Extreme Weather)
+    "wind_u": Perturbation("normal", (0.0, 30.0)),                     # σ=30 m/s
+    "wind_v": Perturbation("normal", (0.0, 60.0)),                     # σ=60 m/s (Hurricane gusts)
+    
+    # Mass
+    "initial_mass": Perturbation("normal", (30_600.0, 500.0)),         # σ=500 kg
 }
 
 
