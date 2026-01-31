@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import math
-from typing import Callable
+from typing import Callable, Sequence
+
+import numpy as np
 
 from core.atmosphere import Atmosphere, ExponentialAtmosphere
 
@@ -54,13 +56,13 @@ class BallisticModel:
     def derivatives(
         self,
         _t: float,
-        state: list[float],
+        state: Sequence[float] | np.ndarray,
         *,
         density_factor: float = 1.0,
         wind_u_m_s: float = 0.0,  # Along-track wind (headwind positive)
         wind_v_m_s: float = 0.0,  # Cross-track wind (right positive)
         mass: float | None = None,
-    ) -> list[float]:
+    ) -> np.ndarray:
         """
         Compute state derivatives for 3D ballistic trajectory.
         
@@ -72,7 +74,10 @@ class BallisticModel:
         - gamma: flight path angle [rad] (positive up)
         - psi: heading angle [rad] (azimuth, 0=launch direction)
         """
-        _downrange, _crossrange, altitude, velocity, gamma, psi = state
+        if isinstance(state, np.ndarray):
+            _downrange, _crossrange, altitude, velocity, gamma, psi = state.tolist()
+        else:
+            _downrange, _crossrange, altitude, velocity, gamma, psi = state
         
         # Atmospheric properties
         density = self._atmosphere.density(altitude, density_factor=density_factor)
@@ -133,4 +138,4 @@ class BallisticModel:
         else:
             psi_rate = 0.0
         
-        return [downrange_rate, crossrange_rate, altitude_rate, velocity_rate, gamma_rate, psi_rate]
+        return np.array((downrange_rate, crossrange_rate, altitude_rate, velocity_rate, gamma_rate, psi_rate))
