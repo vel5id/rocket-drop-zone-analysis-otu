@@ -79,7 +79,7 @@ class SentinelMetadataExtractor:
         logger.info(f"[OK] Created mock metadata with {len(df)} scenes")
         return df
     
-    def extract_real_metadata(self, max_scenes: int = 50) -> pd.DataFrame:
+    def extract_real_metadata(self, max_scenes: int = 50, cloud_threshold: int = 30) -> pd.DataFrame:
         """Extract real metadata from Google Earth Engine."""
         if not self.gee_available:
             logger.error("[ERROR] GEE not available, cannot extract real metadata")

@@ -49,6 +49,7 @@ class Chunk:
     # Metadata
     is_processed: bool = False
     error: Optional[str] = None
+    missing_data: List[str] = field(default_factory=list)
     
     def to_ee_geometry(self) -> "ee.Geometry":
         """Convert chunk to Earth Engine geometry."""
@@ -79,6 +80,7 @@ class Chunk:
             },
             "is_processed": self.is_processed,
             "error": self.error,
+            "missing_data": self.missing_data,
         }
 
 
@@ -271,6 +273,7 @@ class ChunkManager:
                     "q_relief": chunk.q_relief,
                     "q_otu": chunk.q_otu,
                     "is_processed": chunk.is_processed,
+                    "missing_data": chunk.missing_data,
                 },
                 "geometry": {
                     "type": "Polygon",

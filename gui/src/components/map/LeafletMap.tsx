@@ -72,6 +72,16 @@ const ImpactPointsLayer = React.memo(({ points }: { points: GeoJSONFeatureCollec
 const OTULayer = React.memo(({ grid }: { grid: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> }) => {
     // Style function for GeoJSON
     const style = (feature: any) => {
+        const missing = feature?.properties?.missing_data;
+        if (missing && missing.length > 0) {
+            return {
+                color: '#9333ea', // Purple-600
+                fillColor: '#9333ea',
+                fillOpacity: 0.8,
+                weight: 1
+            };
+        }
+
         const val = feature?.properties?.q_otu;
         // console.log('OTU Value:', val); // Debug one frame if needed, but might spam
         return {
@@ -85,9 +95,15 @@ const OTULayer = React.memo(({ grid }: { grid: GeoJSONFeatureCollection<GeoJSONP
     // Binding popups
     const onEachFeature = (feature: any, layer: any) => {
         if (feature.properties) {
+            const missing = feature.properties.missing_data;
+            const missingHtml = (missing && missing.length > 0)
+                ? `<div style="color: #9333ea; font-weight: bold;">MISSING: ${missing.join(', ')}</div>`
+                : '';
+
             const content = `
                 <div style="font-family: monospace;">
-                    <strong>Grid:</strong> ${feature.properties.grid_id}<br/>
+                    <strong>Grid:</strong> ${feature.properties.id}<br/>
+                    ${missingHtml}
                     <strong>OTU:</strong> ${feature.properties.q_otu?.toFixed(3) ?? 'N/A'}<br/>
                     <strong>NDVI:</strong> ${feature.properties.q_vi?.toFixed(3) ?? 'N/A'}<br/>
                     <strong>Relief:</strong> ${feature.properties.q_relief?.toFixed(3) ?? 'N/A'}

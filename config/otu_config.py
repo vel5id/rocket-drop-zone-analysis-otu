@@ -68,7 +68,7 @@ class FireConfig:
 class GEEConfig:
     """Google Earth Engine configuration."""
     project_id: str = "qgis-forest-vladimirfominov49"
-    ndvi_window_days: int = 15
+    ndvi_window_days: int = 14
     cloud_threshold: int = 30
     
     # If True, raise error when GEE is unavailable instead of using mock data

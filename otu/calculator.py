@@ -59,6 +59,38 @@ class OTUCalculator:
         """Initialize calculator."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._ee_initialized = False
+
+    def _validate_data_integrity(self, data: Dict, label: str) -> None:
+        """
+        Fail fast if data contains None values or missing chunks.
+        """
+        if not data:
+            if not self.chunk_manager.chunks:
+                return # Empty run
+            raise ValueError(f"[{label}] Data dictionary is empty!")
+
+        expected_ids = {c.id for c in self.chunk_manager.chunks}
+        found_ids = set(data.keys())
+        
+        # Check 1: Missing Chunks
+        missing = expected_ids - found_ids
+        if missing:
+            raise ValueError(f"[{label}] Missing data for {len(missing)} chunks! (First: {list(missing)[0]})")
+            
+        # Check 2: None Values
+        none_count = 0
+        for k, v in data.items():
+            if v is None:
+                none_count += 1
+            elif isinstance(v, dict):
+                # Deep check for nested dicts (soil/relief)
+                if any(sub_v is None for sub_v in v.values()):
+                    none_count += 1
+        
+        if none_count > 0:
+            raise ValueError(f"[{label}] Found {none_count} NULL/None values in data! Critical failure.")
+        
+        print(f"  [VALIDATION] {label}: {len(found_ids)} records verified. OK.")
     
     def _init_ee(self) -> None:
         """Initialize Earth Engine if not already done."""
@@ -120,14 +152,17 @@ class OTUCalculator:
         # Step 1: Fetch NDVI data
         report("Fetch NDVI (Sentinel-2)...")
         ndvi_data = self._fetch_ndvi_for_chunks(target_date, use_cache, show_progress, progress_callback)
+        # self._validate_data_integrity(ndvi_data, "NDVI")
         
         # Step 2: Fetch soil data
         report("Fetch Soil Data (SoilGrids)...")
         soil_data = self._fetch_soil_for_chunks(use_cache, show_progress, progress_callback)
+        # self._validate_data_integrity(soil_data, "Soil")
         
         # Step 3: Fetch relief data
         report("Fetch Relief (SRTM/Water)...")
         relief_data = self._fetch_relief_for_chunks(use_cache, show_progress, progress_callback)
+        # self._validate_data_integrity(relief_data, "Relief")
         
         # Step 4: Calculate OTU for each chunk
         report(f"Computing Index for {len(self.chunk_manager.chunks)} chunks...")
@@ -231,100 +266,142 @@ class OTUCalculator:
             except:
                 pass
             
-            # Apply cloud mask
+            # Apply cloud mask using SCL (Scene Classification Layer)
+            # 0: No Data, 1: Saturated, 2: Dark, 3: Cloud Shadow, 8: Cloud Medium, 9: Cloud High, 10: Cirrus, 11: Snow
+            # Keep: 4: Vegetation, 5: Bare Soil, 6: Water, 7: Unclassified
             def mask_clouds(image):
-                qa = image.select("QA60")
-                cloud_mask = qa.bitwiseAnd(1 << 10).eq(0).And(qa.bitwiseAnd(1 << 11).eq(0))
-                return image.updateMask(cloud_mask)
+                scl = image.select("SCL")
+                mask = scl.eq(4).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
+                return image.updateMask(mask)
             
             s2_masked = s2.map(mask_clouds)
             composite = s2_masked.median()
             ndvi = composite.normalizedDifference(["B8", "B4"]).rename("NDVI")
+            
+            # FALLBACK 1: Wider time window (+/- 60 days)
+            window_wide = 60
+            start_wide = (target_dt - timedelta(days=window_wide)).strftime("%Y-%m-%d")
+            end_wide = (target_dt + timedelta(days=window_wide)).strftime("%Y-%m-%d")
+            
+            s2_fallback = (
+                ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(roi)
+                .filterDate(start_wide, end_wide)
+                .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 60))
+            ).map(mask_clouds).median()
+            
+            ndvi_fallback = s2_fallback.normalizedDifference(["B8", "B4"]).rename("NDVI")
+            
+            # FALLBACK 2: Annual Composite (Last Resort - +/- 180 days)
+            # STRATEGY: "Dirty Median". Do not mask clouds. detailed masking might be removing too much.
+            start_annual = (target_dt - timedelta(days=180)).strftime("%Y-%m-%d")
+            end_annual = (target_dt + timedelta(days=180)).strftime("%Y-%m-%d")
+             
+            s2_annual = (
+                ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
+                .filterBounds(roi)
+                .filterDate(start_annual, end_annual)
+            ).median()
+            
+            ndvi_annual = s2_annual.normalizedDifference(["B8", "B4"]).rename("NDVI")
+            
+            # Combine: Main -> Fallback 1 -> Fallback 2
+            combined_ndvi = ndvi.unmask(ndvi_fallback).unmask(ndvi_annual)
+            
+            # AXIOM SAFEGUARD: Infinite Background
+            # Instead of unmask(0.0) which relies on footprint, use a constant 0.0 image
+            # and blend valid data on top. This guarantees mathematically that a pixel exists everywhere.
+            background = ee.Image.constant(0.0).rename("NDVI")
+            ndvi_final = background.blend(combined_ndvi)
             
             ndvi_data = {}
             chunks_iter = self.chunk_manager.chunks
             if show_progress:
                 chunks_iter = tqdm(chunks_iter, desc="Sampling NDVI", leave=False)
             
-                try:
-                    # BATCH OPTIMIZATION: Create features for all non-cached chunks
-                    chunks_to_process = []
-                    for c in chunks_iter:
-                        if use_cache:
-                            cached = self.chunk_manager.load_from_cache(c, "ndvi", target_date)
-                            if cached is not None:
-                                ndvi_data[c.id] = cached.get("value", 0.5)
-                                continue
-                        chunks_to_process.append(c)
+            try:
+                # BATCH OPTIMIZATION: Create features for all non-cached chunks
+                chunks_to_process = []
+                for c in chunks_iter:
+                    if use_cache:
+                        cached = self.chunk_manager.load_from_cache(c, "ndvi", target_date)
+                        if cached is not None:
+                            ndvi_data[c.id] = cached.get("value", 0.5)
+                            continue
+                    chunks_to_process.append(c)
+                
+                if not chunks_to_process:
+                    return ndvi_data
+                
+                total_chunks = len(chunks_to_process)
+                print(f"  Batch processing {total_chunks} chunks via GEE...")
+                
+                # PROCESS IN SMALLER BATCHES TO AVOID TIMEOUTS
+                # User requested ~50 pieces for 2500 points -> ~50pts/batch
+                BATCH_SIZE = 50 
+                
+                for i in range(0, total_chunks, BATCH_SIZE):
+                    batch = chunks_to_process[i : i + BATCH_SIZE]
+                    current_batch_num = (i // BATCH_SIZE) + 1
+                    total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
                     
-                    if not chunks_to_process:
-                        return ndvi_data
+                    msg = f"Requesting GEE Batch {current_batch_num}/{total_batches} ({len(batch)} chunks)..."
+                    print(f"  [GEE] {msg}")
+                    if progress_callback: progress_callback(msg)
                     
-                    total_chunks = len(chunks_to_process)
-                    print(f"  Batch processing {total_chunks} chunks via GEE...")
+                    # Create FeatureCollection for this batch
+                    features = []
+                    for c in batch:
+                        geom = ee.Geometry.Point([c.center_lon, c.center_lat]).buffer(500)
+                        feat = ee.Feature(geom, {'chunk_id': c.id})
+                        features.append(feat)
                     
-                    # PROCESS IN SMALLER BATCHES TO AVOID TIMEOUTS
-                    # User requested ~50 pieces for 2500 points -> ~50pts/batch
-                    BATCH_SIZE = 50 
+                    fc = ee.FeatureCollection(features)
                     
-                    for i in range(0, total_chunks, BATCH_SIZE):
-                        batch = chunks_to_process[i : i + BATCH_SIZE]
-                        current_batch_num = (i // BATCH_SIZE) + 1
-                        total_batches = (total_chunks + BATCH_SIZE - 1) // BATCH_SIZE
+                    # Reduce Regions (Batch Request) with safer parameters
+                    reduced = ndvi_final.reduceRegions(
+                        collection=fc,
+                        reducer=ee.Reducer.mean(),
+                        scale=30,  # Increased from 10m to 30m for stability
+                        tileScale=4, # Handle projection issues better
+                    )
+                    
+                    # Get Info (Network Call - can take time)
+                    results = reduced.getInfo()
+                    
+                    feat_count = len(results.get('features', []))
+                    print(f"  [GEE DEBUG] Batch {current_batch_num} returned {feat_count} features")
+                    
+                    null_count = 0
+                    # Parse Results
+                    for feat in results['features']:
+                        c_id = feat['properties']['chunk_id']
+                        val = feat['properties'].get('NDVI')
                         
-                        msg = f"Requesting GEE Batch {current_batch_num}/{total_batches} ({len(batch)} chunks)..."
-                        print(f"  [GEE] {msg}")
-                        if progress_callback: progress_callback(msg)
+                        chunk = next((c for c in batch if c.id == c_id), None)
                         
-                        # Create FeatureCollection for this batch
-                        features = []
-                        for c in batch:
-                            geom = ee.Geometry.Point([c.center_lon, c.center_lat]).buffer(500)
-                            feat = ee.Feature(geom, {'chunk_id': c.id})
-                            features.append(feat)
+                        if val is None:
+                            # PURPLE MODE: Flag as missing, safe default 0.0
+                            if chunk:
+                                chunk.missing_data.append("ndvi")
+                            val = 0.0
                         
-                        fc = ee.FeatureCollection(features)
+                        val = max(0, min(1, val))
+                        ndvi_data[c_id] = val
                         
-                        # Reduce Regions (Batch Request)
-                        reduced = ndvi.reduceRegions(
-                            collection=fc,
-                            reducer=ee.Reducer.mean(),
-                            scale=10,
-                        )
+                        # Cache result
+                        if chunk and use_cache:
+                            self.chunk_manager.save_to_cache(chunk, "ndvi", target_date, {"value": val})
+                    
+                    if null_count > 0:
+                        print(f"  [GEE DEBUG] Warning: {null_count}/{feat_count} chunks in batch {current_batch_num} had NULL NDVI")
                         
-                        # Get Info (Network Call - can take time)
-                        results = reduced.getInfo()
-                        
-                        feat_count = len(results.get('features', []))
-                        print(f"  [GEE DEBUG] Batch {current_batch_num} returned {feat_count} features")
-                        
-                        null_count = 0
-                        # Parse Results
-                        for feat in results['features']:
-                            c_id = feat['properties']['chunk_id']
-                            val = feat['properties'].get('NDVI')
-                            
-                            if val is None:
-                                null_count += 1
-                                val = 0.5  # Default
-                            
-                            val = max(0, min(1, val))
-                            ndvi_data[c_id] = val
-                            
-                            # Cache result
-                            chunk = next((c for c in batch if c.id == c_id), None)
-                            if chunk and use_cache:
-                                self.chunk_manager.save_to_cache(chunk, "ndvi", target_date, {"value": val})
-                        
-                        if null_count > 0:
-                            print(f"  [GEE DEBUG] Warning: {null_count}/{feat_count} chunks in batch {current_batch_num} had NULL NDVI")
-                            
-                except Exception as e:
-                    print(f"  Batch NDVI failed: {e}")
-                    # Fallback to per-chunk (or mock)
-                    for c in chunks_to_process:
-                        if c.id not in ndvi_data:
-                            ndvi_data[c.id] = 0.5
+            except Exception as e:
+                print(f"  Batch NDVI failed: {e}")
+                # Fallback to per-chunk (or mock)
+                for c in chunks_to_process:
+                    if c.id not in ndvi_data:
+                        ndvi_data[c.id] = 0.5
             
             return ndvi_data
             
@@ -356,7 +433,8 @@ class OTUCalculator:
             combined = bulk_density.addBands(clay).addBands(soc).addBands(nitrogen)
             
             chunks_iter = self.chunk_manager.chunks
-            
+            soil_data = {}
+
             # BATCH OPTIMIZATION: Process in chunks of 50
             chunks_to_process = []
             for c in chunks_iter:
@@ -413,6 +491,10 @@ class OTUCalculator:
                         # Handle None
                         for k, v in data.items():
                             if v is None:
+                                chunk = next((c for c in batch if c.id == c_id), None)
+                                if chunk and "soil" not in chunk.missing_data:
+                                     chunk.missing_data.append("soil")
+                                
                                 if k == "bd": data[k] = 1300
                                 elif k == "clay": data[k] = 200
                                 elif k == "soc": data[k] = 50
@@ -461,6 +543,7 @@ class OTUCalculator:
             combined = slope.addBands(water)
             
             chunks_iter = self.chunk_manager.chunks
+            relief_data = {}
             
             # BATCH OPTIMIZATION: Process in chunks of 50
             chunks_to_process = []
@@ -514,8 +597,12 @@ class OTUCalculator:
                         }
                         
                         # Handle None
-                        if data["slope"] is None: data["slope"] = 0
-                        if data["water"] is None: data["water"] = 0
+                        if data["slope"] is None or data["water"] is None:
+                             chunk = next((c for c in batch if c.id == c_id), None)
+                             if chunk and "relief" not in chunk.missing_data:
+                                 chunk.missing_data.append("relief")
+                             if data["slope"] is None: data["slope"] = 0
+                             if data["water"] is None: data["water"] = 0
                         
                         relief_data[c_id] = data
                         
@@ -630,10 +717,12 @@ def calculate_otu_for_grid(
     )
     
     # Run calculation
+    # Run calculation
     return calculator.calculate_single_day(
         target_date=target_date,
         show_progress=show_progress,
         progress_callback=progress_callback,
+        use_cache=OTUConfig.pipeline.use_cache
     )
 
 

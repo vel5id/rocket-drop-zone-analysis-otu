@@ -235,6 +235,7 @@ export default function App() {
                     isSimulating={isSimulating}
                     simDone={simDone}
                     progress={progress}
+                    progressMessage={progressMessage}
                     isDemoMode={isDemoMode}
                     baseLayer={baseLayer}
                     setBaseLayer={setBaseLayer}

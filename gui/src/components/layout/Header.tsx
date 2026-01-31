@@ -1,10 +1,11 @@
+import { Globe, Moon, Rocket, Settings } from 'lucide-react';
 import React from 'react';
-import { Rocket, Globe, Moon, Settings } from 'lucide-react';
 
 interface HeaderProps {
     isSimulating: boolean;
     simDone: boolean;
     progress: number;
+    progressMessage: string;
     isDemoMode: boolean;
     baseLayer: 'satellite' | 'dark' | 'terrain' | 'streets';
     setBaseLayer: (layer: 'satellite' | 'dark' | 'terrain' | 'streets') => void;
@@ -14,6 +15,7 @@ const Header: React.FC<HeaderProps> = ({
     isSimulating,
     simDone,
     progress,
+    progressMessage,
     isDemoMode,
     baseLayer,
     setBaseLayer
@@ -37,7 +39,7 @@ const Header: React.FC<HeaderProps> = ({
                 {/* Status Badge */}
                 <div className="px-4 py-2 rounded-full border border-[rgba(255,255,255,0.1)] text-xs font-mono uppercase bg-[rgba(0,0,0,0.3)] flex items-center gap-3">
                     <div className={`w-2.5 h-2.5 rounded-full ${simDone ? 'bg-green-500 status-ready' : isSimulating ? 'bg-amber-500 status-computing' : 'bg-slate-500'}`}></div>
-                    <span className="text-[#94a3b8]">{isSimulating ? 'COMPUTING' : simDone ? 'READY' : 'IDLE'}</span>
+                    <span className="text-[#94a3b8]">{isSimulating ? progressMessage : simDone ? 'READY' : 'IDLE'}</span>
                     {isSimulating && <span className="text-[#06b6d4] font-bold">{progress}%</span>}
                 </div>
 
