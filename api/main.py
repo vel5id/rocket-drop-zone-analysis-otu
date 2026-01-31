@@ -21,6 +21,8 @@ from .simulation_runner import (
     get_simulation_result,
 )
 from .preview import calculate_trajectory_preview
+import asyncio
+from functools import partial
 
 # Telemetry for reproducibility
 try:
@@ -53,7 +55,10 @@ async def preview_trajectory(request: SimulationRequest):
     Generate a quick preview of the nominal rocket trajectory.
     Calculates single deterministic path (sigma=0).
     """
-    return calculate_trajectory_preview(request)
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        None, partial(calculate_trajectory_preview, request)
+    )
 
 
 
