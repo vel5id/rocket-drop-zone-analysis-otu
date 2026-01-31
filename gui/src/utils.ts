@@ -1,4 +1,24 @@
-import { EllipseData } from './types';
+import { EllipseData, GeoJSONFeatureCollection, GeoJSONPolygon, OTUCellProperties } from './types';
+
+export function calculateAverageOtu(
+    grid: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> | undefined
+): number {
+    if (!grid || !grid.features || grid.features.length === 0) {
+        return 0;
+    }
+
+    let sum = 0;
+    let count = 0;
+
+    for (const feature of grid.features) {
+        if (feature.properties && typeof feature.properties.q_otu === 'number') {
+            sum += feature.properties.q_otu;
+            count++;
+        }
+    }
+
+    return count > 0 ? sum / count : 0;
+}
 
 export function generateEllipsePoints(ellipse: EllipseData, numPoints: number = 64): [number, number][] {
     const { center_lat, center_lon, semi_major_km, semi_minor_km, angle_deg } = ellipse;
