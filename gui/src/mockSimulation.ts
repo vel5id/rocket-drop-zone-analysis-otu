@@ -7,7 +7,7 @@ import {
     OTUCellProperties,
     UIStats
 } from './types';
-import { calculateDistance } from './utils';
+import { calculateDistance, calculateAverageOtu } from './utils';
 
 // --- Mock Data Generators ---
 function generateMockEllipse(centerLat: number, centerLon: number, isFragment: boolean = false): EllipseData {
@@ -84,7 +84,7 @@ export function runMockSimulation(iterations: number, launchLat: number, launchL
                     impactPoints: impactPoints.features.length,
                     range: `${rangeKm.toFixed(1)}`,
                     semiMajorAxis: primaryEllipse.semi_major_km,
-                    avgOtu: 0.65 + Math.random() * 0.3,
+                    avgOtu: calculateAverageOtu(otuGrid),
                     primaryEllipse: {
                         a: primaryEllipse.semi_major_km * 2,
                         b: primaryEllipse.semi_minor_km * 2,
