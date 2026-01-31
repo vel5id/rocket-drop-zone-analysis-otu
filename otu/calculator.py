@@ -60,6 +60,19 @@ class OTUCalculator:
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._ee_initialized = False
 
+    @staticmethod
+    def _sanitize_float(val: Any, default: float = 0.0) -> float:
+        """Safely convert value to float, handling None, NaN, and Inf."""
+        if val is None:
+            return default
+        try:
+            f_val = float(val)
+            if math.isnan(f_val) or math.isinf(f_val):
+                return default
+            return f_val
+        except (ValueError, TypeError):
+            return default
+
     def _validate_data_integrity(self, data: Dict, label: str) -> None:
         """
         Fail fast if data contains None values or missing chunks.
@@ -326,7 +339,8 @@ class OTUCalculator:
                     if use_cache:
                         cached = self.chunk_manager.load_from_cache(c, "ndvi", target_date)
                         if cached is not None:
-                            ndvi_data[c.id] = cached.get("value", 0.5)
+                            val = cached.get("value", 0.5)
+                            ndvi_data[c.id] = self._sanitize_float(val, default=0.5)
                             continue
                     chunks_to_process.append(c)
                 
@@ -386,7 +400,8 @@ class OTUCalculator:
                                 chunk.missing_data.append("ndvi")
                             val = 0.0
                         
-                        val = max(0, min(1, val))
+                        val = self._sanitize_float(val, default=0.0)
+                        val = max(0.0, min(1.0, val))
                         ndvi_data[c_id] = val
                         
                         # Cache result
@@ -441,7 +456,14 @@ class OTUCalculator:
                 if use_cache:
                     cached = self.chunk_manager.load_from_cache(c, "soil_raw", "static")
                     if cached is not None:
-                        soil_data[c.id] = cached
+                        # Sanitize cached dictionary
+                        sanitized = {
+                            "bd": self._sanitize_float(cached.get("bd"), 1300),
+                            "clay": self._sanitize_float(cached.get("clay"), 200),
+                            "soc": self._sanitize_float(cached.get("soc"), 50),
+                            "n": self._sanitize_float(cached.get("n"), 2),
+                        }
+                        soil_data[c.id] = sanitized
                         continue
                 chunks_to_process.append(c)
             
@@ -488,18 +510,18 @@ class OTUCalculator:
                             "n": props.get("nitrogen_0-5cm_mean", 2),
                         }
                         
-                        # Handle None
+                        # Handle None/NaN
+                        defaults = {"bd": 1300, "clay": 200, "soc": 50, "n": 2}
                         for k, v in data.items():
-                            if v is None:
+                            sanitized_v = self._sanitize_float(v, defaults.get(k, 0))
+                            # Check if value was invalid (None or NaN)
+                            is_invalid = (v is None) or (isinstance(v, float) and (math.isnan(v) or math.isinf(v)))
+
+                            if is_invalid:
                                 chunk = next((c for c in batch if c.id == c_id), None)
                                 if chunk and "soil" not in chunk.missing_data:
                                      chunk.missing_data.append("soil")
-                                
-                                if k == "bd": data[k] = 1300
-                                elif k == "clay": data[k] = 200
-                                elif k == "soc": data[k] = 50
-                                elif k == "n": data[k] = 2
-                                else: data[k] = 0
+                            data[k] = sanitized_v
                         
                         soil_data[c_id] = data
                         
@@ -551,7 +573,11 @@ class OTUCalculator:
                 if use_cache:
                     cached = self.chunk_manager.load_from_cache(c, "relief_raw", "static")
                     if cached is not None:
-                        relief_data[c.id] = cached
+                        sanitized = {
+                            "slope": self._sanitize_float(cached.get("slope"), 0),
+                            "water": self._sanitize_float(cached.get("water"), 0),
+                        }
+                        relief_data[c.id] = sanitized
                         continue
                 chunks_to_process.append(c)
                 
@@ -596,13 +622,20 @@ class OTUCalculator:
                             "water": props.get("occurrence", 0),
                         }
                         
-                        # Handle None
-                        if data["slope"] is None or data["water"] is None:
+                        # Handle None/NaN
+                        orig_slope = data["slope"]
+                        orig_water = data["water"]
+
+                        data["slope"] = self._sanitize_float(orig_slope, 0)
+                        data["water"] = self._sanitize_float(orig_water, 0)
+
+                        is_invalid_slope = (orig_slope is None) or (isinstance(orig_slope, float) and (math.isnan(orig_slope) or math.isinf(orig_slope)))
+                        is_invalid_water = (orig_water is None) or (isinstance(orig_water, float) and (math.isnan(orig_water) or math.isinf(orig_water)))
+
+                        if is_invalid_slope or is_invalid_water:
                              chunk = next((c for c in batch if c.id == c_id), None)
                              if chunk and "relief" not in chunk.missing_data:
                                  chunk.missing_data.append("relief")
-                             if data["slope"] is None: data["slope"] = 0
-                             if data["water"] is None: data["water"] = 0
                         
                         relief_data[c_id] = data
                         
@@ -639,21 +672,34 @@ class OTUCalculator:
         for chunk in chunks_iter:
             try:
                 # 1. Vegetation
-                q_vi = ndvi_data.get(chunk.id, 0.5)
+                q_vi = self._sanitize_float(ndvi_data.get(chunk.id, 0.5), 0.5)
                 
                 # 2. Soil
-                s = soil_data.get(chunk.id, {"bd": 1300, "clay": 200, "soc": 50, "n": 2})
-                q_si = compute_q_si(s["bd"], s["clay"])
-                q_bi = compute_q_bi(s["soc"], s["n"])
+                s_default = {"bd": 1300, "clay": 200, "soc": 50, "n": 2}
+                s = soil_data.get(chunk.id, s_default)
+
+                # Ensure soil values are safe
+                bd = self._sanitize_float(s.get("bd"), 1300)
+                clay = self._sanitize_float(s.get("clay"), 200)
+                soc = self._sanitize_float(s.get("soc"), 50)
+                n = self._sanitize_float(s.get("n"), 2)
+
+                q_si = compute_q_si(bd, clay)
+                q_bi = compute_q_bi(soc, n)
                 
                 # 3. Relief
-                r = relief_data.get(chunk.id, {"slope": 0, "water": 0})
+                r_default = {"slope": 0, "water": 0}
+                r = relief_data.get(chunk.id, r_default)
+
+                slope = self._sanitize_float(r.get("slope"), 0)
+                water_val = self._sanitize_float(r.get("water"), 0)
+
                 # Water occurrence is 0-100 in GEE, normalize to 0-1 for logic if needed?
                 # Logic expects "is_water" as 0 or 1 usually, or probability.
                 # GEE 'occurrence' is percentage 0-100.
                 # Let's convert to 0-1 probability.
-                water_prob = r["water"] / 100.0
-                q_relief = compute_q_relief(r["slope"], water_prob)
+                water_prob = water_val / 100.0
+                q_relief = compute_q_relief(slope, water_prob)
                 
                 # 4. Final OTU
                 q_otu = compute_otu_index(q_vi, q_si, q_bi, q_relief)
