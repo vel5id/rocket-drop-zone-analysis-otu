@@ -1,557 +1,501 @@
-# 🚀 Rocket Drop Zone Analysis & Ecological Impact Assessment (OTU)
 
-> Monte Carlo simulation toolkit for modeling the first-stage drop zone of the Proton launch vehicle and assessing ecological sustainability using the Q_OTU composite index.
+# 🚀 Rocket Drop Zone Analysis (OTU) System
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<!-- 
+LANGUAGES / ЯЗЫКИ / ТІЛДЕР 
+-->
+<div align="center">
 
----
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104-green?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev/)
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
+[![Status](https://img.shields.io/badge/Status-Suspended-orange.svg)]()
 
-## 🌍 Select Language / Выберите язык / Seleccione idioma
+[🇬🇧 English](#-english-documentation) | 
+[🇷🇺 Русский](#-русская-документация) | 
+[🇰🇿 Қазақша](#-қазақша-құжаттама)
 
-| 🇬🇧 [English](#-english) | 🇷🇺 [Русский](#-русский) | 🇪🇸 [Español](#-español) | 🤖 [AI/LLM Context](#-aillm-context) |
-|:---:|:---:|:---:|:---:|
-
----
-
-<details open>
-<summary><h2>🇬🇧 English</h2></summary>
-
-## 🎯 Project Purpose
-
-This software package was developed **for a scientific publication** dedicated to the methodology for determining ecologically safe drop zones for separating parts of launch vehicles.
-
-**Main objectives:**
-1. Monte Carlo ballistic trajectory modeling of the Proton first stage
-2. Construction of 3σ dispersion ellipses for the impact zone
-3. Calculation of the composite ecological index Q_OTU for each territory cell
-4. Visualization of results on interactive maps with satellite data overlay
+</div>
 
 ---
 
-## 📚 Scientific Background
+# 🇬🇧 English Documentation
 
-### Territorial Ecological Sustainability Index (Q_OTU)
+## 1. Introduction
 
-The composite Q_OTU index evaluates the territory's ability to withstand ecological damage from rocket fragment impacts:
+**Rocket Drop Zone Analysis (OTU)** is a specialized software suite designed for aerospace environmental monitoring. Its primary purpose is to simulate, analyze, and assess the impact of rocket stage separation (Separating Parts of Launch Vehicles - SPLV/OTU) on terrestrial ecosystems.
 
-$$Q_{OTU} = (k_{Vi} \cdot Q_{Vi} + k_{Si} \cdot Q_{Si} + k_{Bi} \cdot Q_{Bi}) \times Q_{Relief}$$
+The system employs **Monte Carlo simulations** to predict probabilistic impact ellipses and integrates with **Google Earth Engine (GEE)** to retrieve real-time satellite imagery (Sentinel-2) for ecological assessment.
 
-**Index components:**
-
-| Index | Name | Weight | Description |
-|-------|------|--------|-------------|
-| Q_Vi | Vegetation Index | k_Vi = 0.35 | Normalized NDVI, characterizes vegetation cover density |
-| Q_Si | Soil Strength | k_Si = 0.35 | Mechanical stability: 0.6×BD + 0.4×Clay |
-| Q_Bi | Soil Quality (Bonitet) | k_Bi = 0.30 | Biological productivity: 0.7×SOC + 0.3×N |
-| Q_Relief | Relief Modifier | multiplier | Accounts for slope, aspect, and water bodies |
-
-### Additional Indices
-
-- **Q_Fire** — Fire risk (based on biomass/NDVI)
-- **Aspect Modifier** — Slope exposure modifier (north-facing slopes are more stable)
+### Key Capabilities
+- **Probabilistic Modeling**: Simulation of 1000+ trajectories to determine 3-sigma safety zones.
+- **Ecological Impact Assessment**: Automated calculation of NDVI (Vegetation), Water Indexes (NDWI), and Soil Stability.
+- **Economic Analysis**: Estimation of land restoration costs based on biomass loss and soil degradation.
+- **Visual Analytics**: Interactive 3D/2D maps via Leaflet and React.
 
 ---
 
-## 📊 Data Sources
+## 2. Architecture & Tech Stack
 
-### Proton Launch Vehicle Specifications
+The system follows a modern **Client-Server** architecture, containerized for easy deployment.
 
-First stage parameters of the Proton-M launch vehicle are taken from open sources:
-- [Encyclopedia Astronautica](http://www.astronautix.com/p/proton.html)
-- [Gunter's Space Page](https://space.skyrocket.de/doc_lau/proton.htm)
-- Khrunichev State Research and Production Space Center technical documentation
-
-#### First Stage Geometric and Mass Characteristics
-
-| Parameter | Value | Unit |
-|-----------|-------|------|
-| Diameter | 7.4 | m |
-| Length | 21.18 | m |
-| Dry Mass | 30,600 | kg |
-| Propellant Mass | 428,300 | kg |
-| Reference Area | 43.0 | m² |
-
-#### Propulsion System Characteristics (6× RD-275M)
-
-| Parameter | Value | Unit |
-|-----------|-------|------|
-| Total Thrust | 10,026 | kN |
-| Specific Impulse (sea level) | 288 | s |
-| Specific Impulse (vacuum) | 316 | s |
-| Burn Time | 123 | s |
-
-#### First Stage Separation Parameters
-
-| Parameter | Mean | σ (StdDev) | Unit |
-|-----------|------|------------|------|
-| Separation Altitude | 43,000 | 500 | m |
-| Velocity | 1,738 | 30 | m/s |
-| Flight Path Angle | 25 | 1 | ° |
-| Azimuth | 45 | 0.5 | ° |
-| Range to Impact | 306 | — | km |
-
-#### Monte Carlo Simulation Perturbations
-
-| Parameter | Distribution | Mean | σ |
-|-----------|--------------|------|---|
-| Initial Velocity | Normal | 1,738 m/s | 150 m/s |
-| Initial Altitude | Normal | 43,000 m | 2,000 m |
-| Flight Path Angle | Normal | 25° | 4° |
-| Azimuth | Normal | 45° | 3° |
-| Drag Coefficient | Uniform | [0.7, 1.5] | — |
-| Air Density (factor) | Normal | 1.0 | 0.12 |
-| Along-track Wind | Normal | 0 | 40 m/s |
-| Cross-track Wind | Normal | 0 | 40 m/s |
-| Stage Mass | Normal | 30,600 kg | 500 kg |
-
-### Satellite Data
-
-Ecological data obtained from **Google Earth Engine**:
-
-| Dataset | GEE Identifier | Resolution | Description |
-|---------|----------------|------------|-------------|
-| NDVI | `MODIS/061/MOD13A2` | 1 km | MODIS Terra vegetation index (16-day composite) |
-| DEM | `USGS/SRTMGL1_003` | 30 m | SRTM global elevation model |
-| Water Bodies | `JRC/GSW1_4/GlobalSurfaceWater` | 30 m | JRC surface water map |
-| Soil (Clay) | `OpenLandMap/SOL/SOL_CLAY-WFRACTION_USDA-3A1A1A_M/v02` | 250 m | Soil clay content |
-| Soil (Density) | SoilGrids 250m | 250 m | Bulk density |
-| Soil (SOC) | SoilGrids 250m | 250 m | Soil organic carbon |
-| Soil (Nitrogen) | SoilGrids 250m | 250 m | Total nitrogen |
-
----
-
-## 📁 Project Structure
-
-```
-rocket-drop-zone-analysis-otu/
-├── config/                     # Configuration and parameters
-│   ├── rocket_params.py        # Proton LV specifications
-│   ├── simulation_config.py    # Monte Carlo simulation parameters
-│   ├── gee_config.py           # GEE dataset identifiers
-│   └── otu_config.py           # Q_OTU index weights and thresholds
-│
-├── core/                       # Ballistic calculations core
-│   ├── atmosphere.py           # Standard atmosphere model
-│   ├── aerodynamics.py         # Aerodynamic coefficients
-│   ├── ballistics.py           # Equations of motion, RK4 integrator
-│   ├── gpu_ballistics.py       # GPU-accelerated calculations (Numba JIT)
-│   ├── monte_carlo.py          # Monte Carlo simulation driver
-│   ├── trajectory.py           # Trajectory propagator
-│   └── geo_utils.py            # Geodetic transformations
-│
-├── gee/                        # Google Earth Engine integration
-│   ├── authenticator.py        # GEE authentication
-│   ├── data_fetcher.py         # Data retrieval
-│   ├── ndvi_processor.py       # NDVI processing
-│   ├── dem_processor.py        # DEM processing (slope, aspect)
-│   ├── soil_processor.py       # Soil data processing
-│   ├── water_processor.py      # Water bodies processing
-│   ├── local_processor.py      # Local processing with chunking
-│   └── ecological_index.py     # Ecological indices calculation
-│
-├── grid/                       # Grid operations
-│   ├── grid_generator.py       # 1×1 km grid generation
-│   ├── polygon_grid.py         # Polygon grid
-│   ├── ellipse_calculator.py   # Dispersion ellipse calculation
-│   └── cell_calculator.py      # Cell-wise calculations
-│
-├── indices/                    # Ecological indices
-│   ├── q_otu.py                # Composite Q_OTU index
-│   ├── vegetation_index.py     # Vegetation index Q_Vi
-│   ├── soil_strength_index.py  # Soil strength index Q_Si
-│   ├── soil_quality_index.py   # Soil quality index Q_Bi
-│   └── relief_index.py         # Relief modifier Q_Relief
-│
-├── otu/                        # OTU pipeline
-│   ├── calculator.py           # Main OTU calculator
-│   ├── otu_logic.py            # Index calculation logic
-│   ├── chunk_manager.py        # Chunk manager for large areas
-│   ├── temporal_analyzer.py    # Temporal analysis
-│   ├── geotiff_exporter.py     # GeoTIFF export
-│   └── economic_damage.py      # Economic damage assessment
-│
-├── visualization/              # Results visualization
-│   ├── satellite_overlay.py    # Satellite imagery overlay
-│   ├── map_renderer.py         # Map rendering
-│   ├── ellipse_plotter.py      # Ellipse plotting
-│   ├── heatmap_generator.py    # Heatmap generation
-│   └── report_generator.py     # Report generation
-│
-├── tests/                      # Unit tests
-├── main.py                     # Entry point (demo)
-├── run_pipeline.py             # Full simulation pipeline
-├── run_otu_pipeline.py         # Q_OTU calculation pipeline
-└── requirements.txt            # Python dependencies
+```mermaid
+graph TD
+    User[Scientist] -->|Browser| UI[React Frontend]
+    UI -->|HTTP/JSON| API[FastAPI Backend]
+    
+    subgraph "Server Core (Python)"
+        API --> Sim[Monte Carlo Engine]
+        API --> Grid[Grid Generator]
+        API --> Export[Report Service]
+    end
+    
+    subgraph "External Services"
+        Export -->|REST| GEE[Google Earth Engine]
+    end
+    
+    Sim -->|Results| Store[Local Storage / DB]
+    Grid -->|GeoJSON| UI
 ```
 
----
-
-## 🔬 Mathematical Models
-
-### 1. Ballistic Model
-
-Equations of motion in geocentric coordinate system:
-
-$$\frac{d\vec{r}}{dt} = \vec{v}$$
-
-$$\frac{d\vec{v}}{dt} = \vec{g} + \vec{a}_{drag} + \vec{a}_{wind}$$
-
-### 2. Atmosphere Model
-
-U.S. Standard Atmosphere 1976 with exponential interpolation between layers.
-
-### 3. Dispersion Ellipse
-
-3σ dispersion ellipse is constructed from the covariance matrix of impact coordinates.
+### Components
+1.  **Backend (`/api`)**: Built with **FastAPI**. Handles simulation logic, coordinate transformations (PyProj), and GEE data fetching.
+2.  **Frontend (`/gui`)**: A **React + Vite** application providing an interactive map interface.
+3.  **Core Logic (`/server_pipeline`)**: Contains the scientific algorithms for grid generation and ellipse calculation.
+4.  **Telemetry (`/telemetry`)**: (Optional) Module for recording reproducible scientific data.
 
 ---
 
-## 🚀 Installation & Usage
+## 3. Mathematical Methodology
 
-```bash
-# Clone the repository
-git clone https://github.com/vel5id/rocket-drop-zone-analysis-otu.git
-cd rocket-drop-zone-analysis-otu
+### 3.1. Stochastic Ballistic Model (Monte Carlo)
+The impact point $P(x, y)$ is determined by integrating the equations of motion with stochastic initial conditions. We execute $N=1000+$ iterations for each simulation.
 
-# Create virtual environment
-python -m venv venv
-venv\Scripts\activate     # Windows
-source venv/bin/activate  # Linux/Mac
+The state vector $S = [h, v, \gamma, \psi]$ (altitude, velocity, path angle, azimuth) is perturbed as follows:
 
-# Install dependencies
-pip install -r requirements.txt
+$$
+\begin{aligned}
+h_0 &\sim \mathcal{N}(\mu_h, 2000^2) \\
+v_0 &\sim \mathcal{N}(\mu_v, 150^2) \\
+\gamma_0 &\sim \mathcal{N}(\mu_\gamma, 4^\circ) \\
+\psi_0 &\sim \mathcal{N}(\text{Azimuth}, 3^\circ)
+\end{aligned}
+$$
 
-# Authenticate with Google Earth Engine
-earthengine authenticate
+Where $\mathcal{N}(\mu, \sigma^2)$ is the normal distribution.
 
-# Run demo
-python main.py
-```
+### 3.2. Fragment Dispersion Logic
+If a breakup event occurs (probability $P_{breakup}$), fragments are generated around a reference point $R_{frag}$ calculated as 70% of the primary stage's ballistic range.
 
----
+$$
+\begin{aligned}
+R_{frag} &= 0.7 \cdot R_{primary} \\
+\Delta_{downrange} &\sim \mathcal{N}(0, 15000^2) \quad (\text{15 km spread}) \\
+\Delta_{crossrange} &\sim \mathcal{N}(0, 12000^2) \quad (\text{12 km spread})
+\end{aligned}
+$$
 
-## 📈 Examples
+### 3.3. Outlier Filtering (IQR Method)
+To ensure the safety zone is robust but not excessively large due to extreme outliers, we apply the Interquartile Range (IQR) filter before ellipse fitting:
 
-```python
-from core.monte_carlo import run_monte_carlo
-from config.rocket_params import PROTON_SEPARATION
-from config.simulation_config import build_default_config
+$$
+\begin{aligned}
+IQR &= Q_3 - Q_1 \\
+Bounds &= [Q_1 - 1.5 \cdot IQR, \quad Q_3 + 1.5 \cdot IQR]
+\end{aligned}
+$$
 
-config = build_default_config()
-config.iterations = 1000
-impacts = run_monte_carlo(PROTON_SEPARATION, config)
-```
+Points outside these bounds are excluded from the ellipse calculation.
 
-</details>
+### 3.4. Impact Ellipse & Grid
+The 3-sigma confidence ellipse is derived from the covariance matrix of the filtered points.
+The grid $G$ is generated by rasterizing this ellipse into $1 \times 1$ km cells.
 
----
+$$
+\text{Cell}(i, j) \in \text{Zone} \iff \text{Polygon}_{ellipse} \text{ contains } \text{Center}(i, j)
+$$
 
-<details>
-<summary><h2>🇷🇺 Русский</h2></summary>
-
-## 🎯 Цель проекта
-
-Данный программный комплекс разработан **для научной статьи**, посвящённой методологии определения экологически безопасных зон падения отделяющихся частей ракет-носителей.
-
-**Основные задачи:**
-1. Моделирование баллистической траектории первой ступени РН "Протон" методом Монте-Карло
-2. Построение эллипсов рассеивания (3σ) зоны падения
-3. Расчёт комплексного экологического индекса Q_OTU для каждой ячейки территории
-4. Визуализация результатов на интерактивных картах с наложением спутниковых данных
+The system enforces a safety cap of **50,000 cells** to prevent memory overflow during ecological analysis.
 
 ---
 
-## 📚 Научная основа
+## 4. Installation & Setup
 
-### Индекс экологической устойчивости территории (Q_OTU)
+### Prerequisites
+- **Python 3.10+**: Core runtime.
+- **Node.js 18+**: For the web interface.
+- **Google Earth Engine Account**: For satellite data access.
 
-Композитный индекс Q_OTU оценивает способность территории противостоять экологическому ущербу от падения фрагментов ракеты:
+### Step-by-Step Guide
 
-$$Q_{OTU} = (k_{Vi} \cdot Q_{Vi} + k_{Si} \cdot Q_{Si} + k_{Bi} \cdot Q_{Bi}) \times Q_{Relief}$$
+#### A. Backend Setup
+1.  Navigate to the repository root.
+2.  Create a virtual environment (recommended):
+    ```bash
+    python -m venv .venv
+    .venv\Scripts\activate
+    ```
+3.  Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  Authenticate with GEE:
+    ```bash
+    earthengine authenticate
+    ```
 
-**Компоненты индекса:**
-
-| Индекс | Название | Вес | Описание |
-|--------|----------|-----|----------|
-| Q_Vi | Вегетационный индекс | 0.35 | Нормализованный NDVI |
-| Q_Si | Прочность почв | 0.35 | 0.6×BD + 0.4×Clay |
-| Q_Bi | Качество почв | 0.30 | 0.7×SOC + 0.3×N |
-| Q_Relief | Рельеф | множитель | Уклон, экспозиция, водные объекты |
-
----
-
-## 📊 Исходные данные
-
-### Характеристики РН "Протон"
-
-Источники:
-- [Encyclopedia Astronautica](http://www.astronautix.com/p/proton.html)
-- [Gunter's Space Page](https://space.skyrocket.de/doc_lau/proton.htm)
-- Документация ГКНПЦ им. М.В. Хруничева
-
-#### Первая ступень
-
-| Параметр | Значение | Ед. изм. |
-|----------|----------|----------|
-| Диаметр | 7.4 | м |
-| Длина | 21.18 | м |
-| Сухая масса | 30,600 | кг |
-| Масса топлива | 428,300 | кг |
-
-#### Двигательная установка (6× РД-275М)
-
-| Параметр | Значение | Ед. изм. |
-|----------|----------|----------|
-| Тяга | 10,026 | кН |
-| Уд. импульс (ур. моря) | 288 | с |
-| Уд. импульс (вакуум) | 316 | с |
-| Время работы | 123 | с |
-
-#### Параметры отделения
-
-| Параметр | Среднее | σ | Ед. |
-|----------|---------|---|-----|
-| Высота | 43,000 | 500 | м |
-| Скорость | 1,738 | 30 | м/с |
-| Угол траектории | 25 | 1 | ° |
-| Дальность | 306 | — | км |
-
-### Спутниковые данные (Google Earth Engine)
-
-| Датасет | ID | Разрешение |
-|---------|----|------------|
-| NDVI | `MODIS/061/MOD13A2` | 1 км |
-| DEM | `USGS/SRTMGL1_003` | 30 м |
-| Водные объекты | `JRC/GSW1_4/GlobalSurfaceWater` | 30 м |
-| Почвы | SoilGrids 250m | 250 м |
+#### B. Frontend Setup
+1.  Navigate to `gui/`:
+    ```bash
+    cd gui
+    ```
+2.  Install packages:
+    ```bash
+    npm install
+    ```
 
 ---
 
-## 🚀 Установка и запуск
+## 5. Usage
 
-```bash
-git clone https://github.com/vel5id/rocket-drop-zone-analysis-otu.git
-cd rocket-drop-zone-analysis-otu
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-earthengine authenticate
-python main.py
-```
+### Starting the System
+You can use the provided helper scripts:
 
-</details>
+1.  **Backend**: Run `run_server.py`.
+    -   *Console output should show: `Uvicorn running on http://0.0.0.0:8000`*
+    
+2.  **Frontend**: Run `run_frontend.bat`.
+    -   *Opens browser at `http://localhost:5173`*
 
----
-
-<details>
-<summary><h2>🇪🇸 Español</h2></summary>
-
-## 🎯 Propósito del Proyecto
-
-Este paquete de software fue desarrollado **para una publicación científica** dedicada a la metodología para determinar zonas de caída ecológicamente seguras para las partes separables de vehículos de lanzamiento.
-
-**Objetivos principales:**
-1. Modelado de trayectoria balística Monte Carlo de la primera etapa del Proton
-2. Construcción de elipses de dispersión 3σ para la zona de impacto
-3. Cálculo del índice ecológico compuesto Q_OTU para cada celda del territorio
-4. Visualización de resultados en mapas interactivos con superposición de datos satelitales
+### Workflow
+1.  **Select Zone**: Choose a pre-defined drop zone or enter coordinates.
+2.  **Configure Parameters**:
+    -   Separation Altitude (km)
+    -   Velocity (m/s)
+    -   Wind Deviation estimates
+3.  **Run Simulation**: Click "Run Monte Carlo".
+4.  **Analyze Results**: View the generated heatmaps.
+5.  **Export Report**: Click "Export Data". The system will generate a ZIP file containing:
+    -   `1_otu_extended_analysis.csv` (Raw Data)
+    -   `5_economic_summary.csv` (Cost Estimates)
+    -   Maps and metadata.
 
 ---
 
-## 📚 Base Científica
+## 6. Directory Structure
 
-### Índice de Sostenibilidad Ecológica Territorial (Q_OTU)
-
-El índice compuesto Q_OTU evalúa la capacidad del territorio para resistir el daño ecológico de los impactos de fragmentos de cohetes:
-
-$$Q_{OTU} = (k_{Vi} \cdot Q_{Vi} + k_{Si} \cdot Q_{Si} + k_{Bi} \cdot Q_{Bi}) \times Q_{Relief}$$
-
-**Componentes del índice:**
-
-| Índice | Nombre | Peso | Descripción |
-|--------|--------|------|-------------|
-| Q_Vi | Índice de Vegetación | 0.35 | NDVI normalizado |
-| Q_Si | Resistencia del Suelo | 0.35 | 0.6×BD + 0.4×Arcilla |
-| Q_Bi | Calidad del Suelo | 0.30 | 0.7×SOC + 0.3×N |
-| Q_Relief | Modificador de Relieve | multiplicador | Pendiente, aspecto, cuerpos de agua |
-
----
-
-## 📊 Fuentes de Datos
-
-### Especificaciones del Vehículo de Lanzamiento Proton
-
-Fuentes:
-- [Encyclopedia Astronautica](http://www.astronautix.com/p/proton.html)
-- [Gunter's Space Page](https://space.skyrocket.de/doc_lau/proton.htm)
-
-#### Primera Etapa
-
-| Parámetro | Valor | Unidad |
-|-----------|-------|--------|
-| Diámetro | 7.4 | m |
-| Longitud | 21.18 | m |
-| Masa Seca | 30,600 | kg |
-| Masa de Propelente | 428,300 | kg |
-
-#### Sistema de Propulsión (6× RD-275M)
-
-| Parámetro | Valor | Unidad |
-|-----------|-------|--------|
-| Empuje Total | 10,026 | kN |
-| Impulso Específico (nivel del mar) | 288 | s |
-| Impulso Específico (vacío) | 316 | s |
-| Tiempo de Combustión | 123 | s |
-
-### Datos Satelitales (Google Earth Engine)
-
-| Conjunto de Datos | ID | Resolución |
-|-------------------|----|------------|
-| NDVI | `MODIS/061/MOD13A2` | 1 km |
-| DEM | `USGS/SRTMGL1_003` | 30 m |
-| Cuerpos de Agua | `JRC/GSW1_4/GlobalSurfaceWater` | 30 m |
-| Suelos | SoilGrids 250m | 250 m |
-
----
-
-## 🚀 Instalación y Uso
-
-```bash
-git clone https://github.com/vel5id/rocket-drop-zone-analysis-otu.git
-cd rocket-drop-zone-analysis-otu
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
-earthengine authenticate
-python main.py
-```
-
-</details>
-
----
-
-<details>
-<summary><h2>🤖 AI/LLM Context</h2></summary>
-
-## AI Assistant Instructions
-
-This section provides structured context for AI assistants (ChatGPT, Claude, Gemini, Copilot, etc.) working with this codebase.
-
-### Project Overview
-
-```yaml
-project_name: rocket-drop-zone-analysis-otu
-domain: Aerospace Engineering & Environmental Science
-purpose: Monte Carlo simulation of rocket stage drop zones + ecological impact assessment
-language: Python 3.10+
-key_dependencies:
-  - numpy, scipy, numba (computations)
-  - earthengine-api, geemap (satellite data)
-  - folium, plotly (visualization)
-  - geopandas, shapely (geospatial)
-```
-
-### Architecture Summary
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    SIMULATION PIPELINE                       │
-├─────────────────────────────────────────────────────────────┤
-│  config/           →  Rocket parameters, simulation config   │
-│  core/             →  Ballistics, atmosphere, Monte Carlo    │
-│  grid/             →  Spatial grid, dispersion ellipses      │
-├─────────────────────────────────────────────────────────────┤
-│                    ECOLOGICAL PIPELINE                        │
-├─────────────────────────────────────────────────────────────┤
-│  gee/              →  Google Earth Engine data fetching      │
-│  indices/          →  Individual ecological indices          │
-│  otu/              →  Composite Q_OTU calculation            │
-├─────────────────────────────────────────────────────────────┤
-│                    OUTPUT                                     │
-├─────────────────────────────────────────────────────────────┤
-│  visualization/    →  Maps, heatmaps, reports                │
-│  output/           →  Generated files (gitignored)           │
-└─────────────────────────────────────────────────────────────┘
-```
-
-### Key Formulas
-
-**Q_OTU (Ecological Sustainability Index):**
-```
-Q_OTU = (0.35×Q_Vi + 0.35×Q_Si + 0.30×Q_Bi) × Q_Relief
-
-Where:
-- Q_Vi = normalized NDVI [0,1]
-- Q_Si = 0.6×norm(bulk_density) + 0.4×norm(clay) [0,1]
-- Q_Bi = 0.7×norm(SOC) + 0.3×norm(nitrogen) [0,1]
-- Q_Relief = f(slope, aspect, water) [0,1]
-```
-
-### Entry Points
-
-| Script | Purpose | Example |
-|--------|---------|---------|
-| `main.py` | Quick demo | `python main.py` |
-| `run_pipeline.py` | Full simulation | `python run_pipeline.py --iterations 500 --gpu` |
-| `run_otu_pipeline.py` | OTU calculation | `python run_otu_pipeline.py --iterations 1000` |
-
-### Important Files for Code Understanding
-
-| File | Description |
+| Path | Description |
 |------|-------------|
-| `config/rocket_params.py` | Proton LV physical parameters |
-| `config/otu_config.py` | All Q_OTU weights and thresholds |
-| `core/monte_carlo.py` | Monte Carlo simulation driver |
-| `core/gpu_ballistics.py` | Numba JIT-accelerated ballistics |
-| `otu/otu_logic.py` | Core Q_OTU calculation logic |
-| `gee/local_processor.py` | GEE data fetching with chunking |
-| `visualization/satellite_overlay.py` | Interactive map generation |
-
-### Common Tasks
-
-**1. Modify rocket parameters:**
-Edit `config/rocket_params.py` — `PROTON_STAGE_ONE`, `PROTON_ENGINE_BLOCK`, `PROTON_SEPARATION`
-
-**2. Change Q_OTU weights:**
-Edit `config/otu_config.py` — `OTUWeights` class
-
-**3. Add new ecological index:**
-1. Create `indices/new_index.py`
-2. Add calculation in `otu/otu_logic.py`
-3. Update `otu/calculator.py` to include it
-
-**4. Change GEE datasets:**
-Edit `config/gee_config.py` — add new `DatasetReference`
-
-### Testing
-
-```bash
-pytest tests/ -v
-```
-
-### Code Style
-
-- Type hints used throughout
-- Dataclasses for configuration
-- NumPy vectorization preferred
-- Numba JIT for hot paths
-
-### Gotchas
-
-1. **GEE Authentication**: Requires `earthengine authenticate` before first run
-2. **GPU Mode**: Uses Numba JIT, not actual GPU — naming is legacy
-3. **Large Areas**: Use chunking via `chunk_manager.py` to avoid GEE payload limits
-4. **Output Files**: All in `output/` directory, gitignored
-
-</details>
+| `api/` | REST API endpoints (`main.py`, `models.py`) |
+| `core/` | Base configuration and logging logic |
+| `gee/` | Google Earth Engine integration scripts |
+| `grid/` | Polygon rasterization and grid algorithms |
+| `gui/` | Frontend source code (React) |
+| `outputs/` | Generated files (CSVs, Maps) |
+| `server_pipeline/` | Scientific logic orchestration |
+| `telemetry/` | Reproducibility logs |
+| `run_server.py` | Entry point for Backend |
 
 ---
 
-## 👥 Author
+## 7. Troubleshooting
 
-- Development: vel5id
+### Common Issues
 
-## 📞 Contact
+**Q: "ModuleNotFoundError: No module named 'fastapi'"**
+*   **A**: You forgot to activate the virtual environment or run `pip install -r requirements.txt`.
 
-For questions and suggestions: [GitHub Issues](https://github.com/vel5id/rocket-drop-zone-analysis-otu/issues)
+**Q: "GEE Authentication Error"**
+*   **A**: Run `earthengine authenticate` in your terminal and follow the browser prompts.
+
+**Q: Map not loading in browser**
+*   **A**: Ensure the backend is running on port 8000. Check the browser console (F12) for CORS errors.
+
+---
+
+<br><br><br>
+
+# 🇷🇺 Русская Документация
+
+## 1. Введение
+
+**Rocket Drop Zone Analysis (OTU)** — это программный комплекс для экологического мониторинга и баллистического анализа. Система предназначена для моделирования зон падения отделяющихся частей ракет-носителей (ОЧРН) и оценки ущерба окружающей среде.
+
+Мы используем **Метод Монте-Карло** для построения полей рассеивания и **Google Earth Engine** для анализа поверхности земли (спутниковые снимки Sentinel-2).
+
+### Ключевые Возможности
+- **Моделирование Траекторий**: Расчет 1000+ вероятностных точек падения с учетом ветра и отклонений тяги.
+- **Экологическая Оценка**: Автоматический расчет вегетационного индекса (NDVI), классификация почв и водных объектов.
+- **Экономический Анализ**: Расчет стоимости рекультивации земель.
+- **Интерактивная Карта**: Визуализация эллипсов рассеивания (3-сигма).
+
+---
+
+## 2. Архитектура
+
+Система состоит из двух независимых частей: Сервера (Python) и Клиента (React).
+
+1.  **Сервер (Backend)**: Выполняет тяжелые математические расчеты. Использует библиотеки `numpy` и `scipy` для физики, `geopandas` для геометрии.
+2.  **Клиент (Frontend)**: Интерфейс для ученого. Позволяет задавать параметры запуска и просматривать результаты на карте.
+
+---
+
+## 3. Математическая Методология
+
+### 3.1. Стохастическая Баллистическая Модель (Монте-Карло)
+Точка падения $P(x, y)$ определяется путем интегрирования уравнений движения со случайными начальными условиями. Для каждой симуляции выполняется $N=1000+$ итераций.
+
+Вектор состояния $S = [h, v, \gamma, \psi]$ (высота, скорость, угол наклона, азимут) возмущается следующим образом:
+
+$$
+\begin{aligned}
+h_0 &\sim \mathcal{N}(\mu_h, 2000^2) \\
+v_0 &\sim \mathcal{N}(\mu_v, 150^2) \\
+\gamma_0 &\sim \mathcal{N}(\mu_\gamma, 4^\circ) \\
+\psi_0 &\sim \mathcal{N}(\text{Азимут}, 3^\circ)
+\end{aligned}
+$$
+
+Где $\mathcal{N}(\mu, \sigma^2)$ — нормальное распределение.
+
+### 3.2. Логика Рассеивания Фрагментов
+В случае разрушения ступени (вероятность $P_{breakup}$), фрагменты генерируются вокруг точки $R_{frag}$, составляющей 70% от баллистической дальности.
+
+$$
+\begin{aligned}
+R_{frag} &= 0.7 \cdot R_{primary} \\
+\Delta_{downrange} &\sim \mathcal{N}(0, 15000^2) \quad (\text{разброс 15 км}) \\
+\Delta_{crossrange} &\sim \mathcal{N}(0, 12000^2) \quad (\text{разброс 12 км})
+\end{aligned}
+$$
+
+### 3.3. Фильтрация Выбросов (Метод IQR)
+Для исключения экстремальных отклонений применяется фильтр межквартильного размаха (IQR):
+
+$$
+\begin{aligned}
+IQR &= Q_3 - Q_1 \\
+Границы &= [Q_1 - 1.5 \cdot IQR, \quad Q_3 + 1.5 \cdot IQR]
+\end{aligned}
+$$
+
+### 3.4. Эллипс Рассеивания и Сетка
+Эллипс доверительной вероятности ($3\sigma$) строится на основе ковариационной матрицы отфильтрованных точек. Сетка генерируется внутри полигона эллипса (ячейки $1 \times 1$ км).
+Система имеет ограничение в **50,000 ячеек** для предотвращения переполнения памяти.
+
+---
+
+## 4. Установка
+
+### Требования
+-   **Python 3.10** или новее.
+-   **Node.js 18** (LTS).
+
+### Инструкция
+
+#### Шаг 1: Подготовка Сервера
+1.  Скачайте репозиторий.
+2.  Откройте терминал в папке проекта.
+3.  Установите библиотеки:
+    ```bash
+    pip install -r requirements.txt
+    ```
+4.  Авторизуйтесь в Google Earth Engine:
+    ```bash
+    earthengine authenticate
+    ```
+
+#### Шаг 2: Подготовка Интерфейса
+1.  Перейдите в папку `gui`:
+    ```bash
+    cd gui
+    ```
+2.  Установите зависимости JS:
+    ```bash
+    npm install
+    ```
+
+---
+
+## 5. Использование
+
+Для работы необходимо запустить **два процесса**.
+
+1.  **Запуск API**:
+    Запустите файл `run_server.py`. В консоли появится сообщение об успешном старте на порту 8000.
+
+2.  **Запуск GUI**:
+    Запустите `run_frontend.bat`. Браузер откроется автоматически.
+
+### Процесс Анализа
+1.  Выберите точку старта (космодром) и азимут пуска.
+2.  Укажите параметры разделения ступеней (высота, скорость).
+3.  Нажмите **"Calculate"**. Система проведет симуляцию.
+4.  Перейдите во вкладку **"Export"**, чтобы получить детальные отчеты в формате CSV.
+
+---
+
+## 6. Структура Проекта
+
+Файловая структура организована модульно:
+
+-   `api/` — Точки входа API (контроллеры).
+-   `server_pipeline/` — Основные алгоритмы (Grid Generator, Export Service).
+-   `gee/` — Скрипты взаимодействия с Earth Engine.
+-   `gui/` — Исходный код веб-интерфейса.
+-   `outputs/` — Здесь сохраняются результаты ваших тестов.
+
+---
+
+<br><br><br>
+
+# 🇰🇿 Қазақша Құжаттама
+
+## 1. Кіріспе
+
+**Rocket Drop Zone Analysis (OTU)** — бұл зымыран-тасығыштардың бөлінетін бөліктерінің (ББ/OTU) құлау аймақтарын модельдеуге және экологиялық бағалауға арналған арнайы бағдарламалық жүйе.
+
+Жүйе **Монте-Карло әдісін** қолдана отырып, ықтимал құлау эллипстерін болжайды және **Google Earth Engine (GEE)** арқылы жерді қашықтықтан зондтау деректерін (Sentinel-2) талдайды.
+
+### Негізгі Мүмкіндіктер
+-   **Траекторияны Модельдеу**: Жел мен қозғалтқыш ауытқуларын ескере отырып, құлау нүктелерін есептеу.
+-   **Экологиялық Мониторинг**: NDVI (Өсімдік индексі) және топырақ жағдайын автоматты түрде анықтау.
+-   **Экономикалық Талдау**: Жерді қалпына келтіру құнын бағалау.
+-   **Визуализация**: Интерактивті карталар мен диаграммалар.
+
+---
+
+## 2. Жүйе Архитектурасы
+
+Жүйе екі негізгі компоненттен тұрады:
+
+1.  **Backend (Сервер)**: Python тілінде жазылған. Күрделі физикалық есептеулерді орындайды.
+2.  **Frontend (Клиент)**: React негізінде жасалған веб-интерфейс. Пайдаланушыға нәтижелерді көрсетеді.
+
+---
+
+## 3. Математикалық Әдістеме
+
+### 3.1. Стохастикалық Баллистикалық Модель
+Құлау нүктесі $P(x, y)$ қозғалыс теңдеулерін кездейсоқ бастапқы шарттармен интеграциялау арқылы анықталады (Монте-Карло, $N=1000+$ итерация).
+
+Күй векторы $S = [h, v, \gamma, \psi]$ (биіктік, жылдамдық, траектория бұрышы, азимут) төмендегідей ауытқиды:
+
+$$
+\begin{aligned}
+h_0 &\sim \mathcal{N}(\mu_h, 2000^2) \\
+v_0 &\sim \mathcal{N}(\mu_v, 150^2) \\
+\gamma_0 &\sim \mathcal{N}(\mu_\gamma, 4^\circ) \\
+\psi_0 &\sim \mathcal{N}(\text{Азимут}, 3^\circ)
+\end{aligned}
+$$
+
+### 3.2. Фрагменттердің Шашырауы
+Егер бұзылу орын алса ($0.7 \cdot R_{primary}$ қашықтықта), фрагменттер Гаусс заңы бойынша шашырайды:
+
+$$
+\begin{aligned}
+\Delta_{downrange} &\sim \mathcal{N}(0, 15000^2) \\
+\Delta_{crossrange} &\sim \mathcal{N}(0, 12000^2)
+\end{aligned}
+$$
+
+### 3.3. Эллипс және Тор
+Қауіпсіздік аймағы ($3\sigma$ эллипс) **IQR сүзгісі** арқылы ауытқуларды алып тастағаннан кейін құрылады.
+Эллипс ішіне $1 \times 1$ км өлшеміндегі тор (Grid) жасалады (максимум 50,000 ұяшық).
+
+---
+
+## 4. Орнату Нұсқаулығы
+
+### Қажетті құралдар
+-   **Python 3.10+** (Сервер үшін).
+-   **Node.js 18+** (Интерфейс үшін).
+-   **Google Earth Engine** аккаунты.
+
+### Қадамдық Нұсқаулық
+
+#### 1-қадам. Серверді баптау
+1.  Жоба бумасын жүктеп алыңыз.
+2.  Терминалды ашып, кітапханаларды орнатыңыз:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+#### 2-қадам. Интерфейсті баптау
+1.  `gui` папкасына өтіңіз:
+    ```bash
+    cd gui
+    ```
+2.  Пакеттерді орнатыңыз:
+    ```bash
+    npm install
+    ```
+
+---
+
+## 5. Қолдану
+
+Жұмысты бастау үшін екі файлды іске қосу керек:
+
+1.  `run_server.py` — Серверді қосады.
+2.  `run_frontend.bat` — Интерфейсті ашады.
+
+Браузерде `http://localhost:5173` мекенжайы ашылғаннан кейін, сіз картадан аймақты таңдап, "Calculate" батырмасын басу арқылы талдау жасай аласыз.
+
+---
+
+## 6. Файлдар Құрылымы
+
+| Папка | Сипаттамасы |
+|-------|-------------|
+| `api/` | Серверлік код және API. |
+| `gui/` | Веб-интерфейс коды. |
+| `outputs/` | Есептік файлдар мен нәтижелер сақталатын орын. |
+| `gee/` | Жерді қашықтықтан зондтау скрипттері. |
+
+---
+
+## 7. Ақаулықтарды жою (Troubleshooting)
+
+Егер қателер пайда болса:
+1.  Python кітапханалары толық орнатылғанын тексеріңіз.
+2.  Интернет байланысын тексеріңіз (GEE үшін қажет).
+3.  Сервердің `port 8000`-де қосылып тұрғанына көз жеткізіңіз.
+
+---
+
+---
+
+## 8. License & Attribution / Лицензия / Лицензиясы
+
+### 🇬🇧 English
+This software was developed specifically for research published in the **Aerospace** journal.
+**Vel5id** is the sole author and copyright holder of this codebase.
+
+The code is released under the **MIT License**.
+You are free to use, modify, and distribute this software for any purpose (including commercial and scientific), **provided that you explicitly cite the original author** in your product, paper, or derivative work.
+
+### 🇷🇺 Русский
+Данный программный комплекс был разработан специально для статьи в журнале **Aerospace**.
+Единственным автором и правообладателем кода является **Vel5id**.
+
+Проект распространяется по лицензии **MIT**.
+Разрешается свободное использование, модификация и распространение кода в любых целях (включая коммерческие и научные), **при условии обязательного указания авторства** в вашем продукте или научной работе.
+
+### 🇰🇿 Қазақша
+Бұл бағдарламалық жасақтама **Aerospace** журналындағы мақала үшін арнайы әзірленген.
+Кодтың жалғыз авторы және құқық иесі — **Vel5id**.
+
+Жоба **MIT лицензиясы** аясында таратылады.
+Сіз бұл кодты кез келген мақсатта (соның ішінде коммерциялық және ғылыми) еркін пайдалана аласыз, бірақ **авторды міндетті түрде көрсетуіңіз керек**.
+
+---
+
+<br>
+<div align="center">
+    <i>Developed for Aerospace Research & Environmental Safety.</i>
+    <br>
+    © 2026 Vladimir. All Rights Reserved.
+</div>

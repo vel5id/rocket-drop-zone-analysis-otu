@@ -279,6 +279,7 @@ async def generate_report_package(request: ExportRequest) -> str:
         {"Parameter": "Grid Cell Size", "Value": "1.0 km2"},
         {"Parameter": "Total Area", "Value": f"{len(df_main)} km2"},
         {"Parameter": "GEE Collection", "Value": "COPERNICUS/S2_SR_HARMONIZED"},
+        {"Parameter": "Atmospheric Correction", "Value": "Sen2Cor 2.9 (GEE pre-applied)"},
         {"Parameter": "Cloud Threshold", "Value": "10%"},
         {"Parameter": "Generated At", "Value": datetime.now().isoformat()}
     ])
