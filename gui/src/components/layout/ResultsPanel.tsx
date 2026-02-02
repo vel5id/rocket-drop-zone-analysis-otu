@@ -1,6 +1,7 @@
-import { Activity, ChevronDown, Download, FileText, Layers, Minimize, Target, Zap, Database, Hash, Calendar, Code } from 'lucide-react';
+import { Activity, Calendar, ChevronDown, Code, Database, FileText, Layers, Minimize, Target, Zap } from 'lucide-react';
 import React from 'react';
 import { ActiveLayers, UIStats } from '../../types';
+import ExportButton from '../common/ExportButton';
 import { StatReadout, TechButton, TechHeader } from '../common/TechUI';
 
 interface ResultsPanelProps {
@@ -90,15 +91,17 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-[#64748b]">Timestamp:</span>
-                                                <span className="text-white">{new Date().toISOString().split('T')[0]} {new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                <span className="text-white">{new Date().toISOString().split('T')[0]} {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                             </div>
                                         </div>
                                     </div>
-                                    
+
                                     <div className="grid grid-cols-2 gap-3">
-                                        <TechButton icon={Download} onClick={() => alert('Exporting full results package...')}>
-                                            Full Package
-                                        </TechButton>
+                                        <ExportButton
+                                            jobId={stats.jobId}
+                                            date="2024-09-09" // TODO: Pass from config
+                                            label="Full Report"
+                                        />
                                         <TechButton icon={FileText} onClick={() => alert('Exporting configuration...')}>
                                             Config Only
                                         </TechButton>
@@ -148,7 +151,7 @@ const ResultsPanel: React.FC<ResultsPanelProps> = ({
                                         </div>
                                     </button>
                                 ))}
-                                
+
                                 {/* Trajectory Preview - always available */}
                                 {[
                                     { id: 'preview', label: 'Trajectory Preview', color: '#ffffff' },

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { runSimulation as apiRunSimulation, checkHealth, pollSimulation } from './api';
+import { runSimulation as apiRunSimulation, checkHealth, getZonePreview, pollSimulation } from './api';
 import { GlobalStyles } from './components/common/GlobalStyles';
 import Footer from './components/layout/Footer';
 import Header from './components/layout/Header';
@@ -66,6 +66,7 @@ export default function App() {
     const [fragmentEllipse, setFragmentEllipse] = useState<EllipseData | undefined>();
     const [impactPoints, setImpactPoints] = useState<GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties> | undefined>();
     const [otuGrid, setOtuGrid] = useState<GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> | undefined>();
+    const [boundaries, setBoundaries] = useState<GeoJSONFeatureCollection<GeoJSONPolygon, { type: string; name: string }> | undefined>();
 
     const [previewTrajectory, setPreviewTrajectory] = useState<TrajectoryPoint[]>([]);
 
@@ -94,6 +95,34 @@ export default function App() {
         handlePreviewError,
         400 // 400ms debounce
     );
+
+    // --- Automatic Zone Preview ---
+    useEffect(() => {
+        // Only run if we have a zone_id and backend is up
+        if (simConfig.zone_id && backendAvailable) {
+            getZonePreview(simConfig)
+                .then(response => {
+                    const features: any[] = [];
+                    if (response.primary_polygon) features.push(response.primary_polygon);
+                    if (response.fragment_polygon) features.push(response.fragment_polygon);
+
+                    if (features.length > 0) {
+                        setBoundaries({
+                            type: 'FeatureCollection',
+                            features: features
+                        });
+                        console.log("Zone preview loaded:", simConfig.zone_id);
+                    } else {
+                        // Clear boundaries if response empty (e.g. invalid zone)
+                        setBoundaries(undefined);
+                    }
+                })
+                .catch(err => console.error("Failed to load zone preview:", err));
+        } else if (!simConfig.zone_id) {
+            // Clear boundaries if zone_id removed (switch to manual mode)
+            setBoundaries(undefined);
+        }
+    }, [simConfig.zone_id, backendAvailable, simConfig]); // Depend on zone_id
 
     const toggleLayer = (layer: keyof ActiveLayers) => setActiveLayers(prev => ({ ...prev, [layer]: !prev[layer] }));
 
@@ -135,9 +164,11 @@ export default function App() {
                 setFragmentEllipse(mockResult.fragmentEllipse);
                 setImpactPoints(mockResult.impactPoints);
                 setOtuGrid(mockResult.otuGrid);
-                setStats(mockResult.stats);
+                setOtuGrid(mockResult.otuGrid);
+                setStats({ ...mockResult.stats, jobId: 'mock-job-123' }); // ✅ Added mock ID
 
                 setActiveLayers(l => ({ ...l, points: true, otu: true }));
+
                 setSimDone(true);
                 setResultsOpen(true);
 
@@ -173,6 +204,9 @@ export default function App() {
             if (result.otu_grid) {
                 setOtuGrid(result.otu_grid as any);
             }
+            if (result.boundaries) {
+                setBoundaries(result.boundaries as any);
+            }
             if (result.stats) {
                 const rangeKm = result.primary_ellipse
                     ? calculateDistance(simConfig.launch_lat, simConfig.launch_lon, result.primary_ellipse.center_lat, result.primary_ellipse.center_lon)
@@ -193,8 +227,10 @@ export default function App() {
                         b: (result.fragment_ellipse?.semi_minor_km || 0) * 2,
                         angle: result.fragment_ellipse?.angle_deg || 0,
                     },
+                    jobId: result.job_id, // ✅ Pass Job ID
                 });
             }
+
 
             setActiveLayers(l => ({ ...l, points: true, otu: true }));
             setSimDone(true);
@@ -223,6 +259,7 @@ export default function App() {
                         fragmentEllipse={fragmentEllipse}
                         impactPoints={impactPoints}
                         otuGrid={otuGrid}
+                        boundaries={boundaries}
                         onZoomChange={setMapZoom}
                         activeLayers={activeLayers}
                         onCursorMove={(lat, lng) => setCursorCoords({ lat, lng })}
@@ -239,6 +276,8 @@ export default function App() {
                     isDemoMode={isDemoMode}
                     baseLayer={baseLayer}
                     setBaseLayer={setBaseLayer}
+                    otuGrid={otuGrid}
+                    targetDate={simConfig.target_date}
                 />
 
                 <Sidebar

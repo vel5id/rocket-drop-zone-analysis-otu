@@ -131,8 +131,7 @@ def grid_to_geojson(
         ]
         
         props = {
-            "id": i + 1,
-            "grid_id": i + 1,  # Added grid_id matching id
+            "id": getattr(cell, "id", f"cell_{i+1}"),  # Use cell.id if available
             "center_lat": cell.center_lat,
             "center_lon": cell.center_lon,
         }
@@ -143,27 +142,29 @@ def grid_to_geojson(
         # Check if values are attached to the cell object (Dynamic attachment)
         elif hasattr(cell, "q_otu"):
             props.update({
-                "q_ndvi": getattr(cell, "q_vi", 0.5),
-                "q_si": getattr(cell, "q_si", 0.5),
-                "q_bi": getattr(cell, "q_bi", 0.5),
-                "q_relief": getattr(cell, "q_relief", 0.5),
-                "q_otu": getattr(cell, "q_otu", 0.5),
-                "q_fire": getattr(cell, "q_fire", 0.0),
+                "q_vi": getattr(cell, "q_vi", 0.0),          # ✅ Correct name
+                "q_si": getattr(cell, "q_si", 0.0),
+                "q_bi": getattr(cell, "q_bi", 0.0),
+                "q_relief": getattr(cell, "q_relief", 0.0),
+                "q_otu": getattr(cell, "q_otu", 0.0),
+                "is_processed": getattr(cell, "is_processed", True),
+                "missing_data": getattr(cell, "missing_data", []),
             })
             if i == 0:
-                print(f"[GeoJSON] Using attached cell attributes for Cell {i+1}: OTU={props['q_otu']}")
+                print(f"[GeoJSON] Using attached cell attributes for Cell {i+1}: OTU={props['q_otu']}, NDVI={props['q_vi']}")
         else:
-            # Default placeholder values
+            # Default placeholder values (should not happen if OTU calculation succeeded)
             props.update({
-                "q_ndvi": 0.5,
-                "q_si": 0.5,
-                "q_bi": 0.5,
-                "q_relief": 0.5,
-                "q_otu": 0.5,
-                "q_fire": 0.0,
+                "q_vi": 0.0,
+                "q_si": 0.0,
+                "q_bi": 0.0,
+                "q_relief": 0.0,
+                "q_otu": 0.0,
+                "is_processed": False,
+                "missing_data": ["ndvi", "soil", "relief"],  # Mark all as missing
             })
             if i == 0:
-                print(f"[GeoJSON] Using DEFAULT values for Cell {i+1} (No OTU data found)")
+                print(f"[GeoJSON] WARNING: Using DEFAULT values for Cell {i+1} (No OTU data found)")
         
         feature = {
             "type": "Feature",

@@ -226,7 +226,7 @@ def download_and_mosaic(image, plan, output_dir, output_name):
     return output_path
 
 
-def fetch_ndvi_tiled(grid_cells, target_date, cache_dir="output/gee_cache", scale_m=20):
+def fetch_ndvi_tiled(grid_cells, target_date, cache_dir="output/gee_cache", scale_m=20, cloud_threshold=20):
     """Fetch NDVI using smart tiled downloads at specified resolution."""
     from datetime import datetime, timedelta
     
@@ -253,12 +253,12 @@ def fetch_ndvi_tiled(grid_cells, target_date, cache_dir="output/gee_cache", scal
         plan = calculate_download_plan(bounds, scale_m)
         print_download_plan(plan, f"NDVI ({year}-{month:02d})")
         
-        print(f"  NDVI composite: {start} to {end}")
+        print(f"  NDVI composite: {start} to {end} (Cloud < {cloud_threshold}%)")
         
         s2 = (ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
               .filterBounds(ee.Geometry.Rectangle(list(bounds)))
               .filterDate(start, end)
-              .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", 20)))
+              .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", cloud_threshold)))
         
         def mask_clouds(img):
             qa = img.select("QA60")

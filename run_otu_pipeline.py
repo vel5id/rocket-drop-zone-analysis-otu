@@ -169,8 +169,9 @@ def generate_grid_optimized(
     cell_size_km: float = 1.0,
 ) -> List[GridCell]:
     """
-    GPU-accelerated grid generation using vectorized operations.
+    Optimized grid generation using matplotlib.path for robust polygon checks.
     
+    Falls back to Numba/custom ray-casting if matplotlib is unavailable.
     Speed improvement: ~5-10x faster for large grids.
     """
     import math
@@ -209,23 +210,49 @@ def generate_grid_optimized(
     
     print(f"    Testing {len(center_lats)} potential cells...")
     
-    # Check which centers are inside polygons (vectorized)
-    results = np.zeros(len(center_lats), dtype=np.int32)
-    
-    for polygon in polygons:
-        poly_arr = np.array(polygon)
-        poly_lats = poly_arr[:, 0]
-        poly_lons = poly_arr[:, 1]
+    # ========================================================================
+    # PRIORITY 1: Use matplotlib.path (robust, vectorized C implementation)
+    # ========================================================================
+    try:
+        from matplotlib.path import Path
         
-        # Use optimized batch processing
-        temp_results = np.zeros(len(center_lats), dtype=np.int32)
-        _point_in_polygon_batch(center_lats, center_lons, poly_lats, poly_lons, temp_results)
+        # Convert points to (x, y) = (lon, lat) format for matplotlib
+        points = np.column_stack((center_lons, center_lats))
         
-        # Combine results (any polygon match)
-        results = np.maximum(results, temp_results)
-    
-    # Filter valid cells
-    valid_indices = np.where(results == 1)[0]
+        # Check containment for each polygon
+        inside_mask = np.zeros(len(points), dtype=bool)
+        
+        for polygon in polygons:
+            # Convert polygon from (lat, lon) to (x, y) = (lon, lat)
+            poly_xy = [(lon, lat) for lat, lon in polygon]
+            path = Path(poly_xy)
+            inside_mask |= path.contains_points(points)
+        
+        valid_indices = np.where(inside_mask)[0]
+        print(f"    [matplotlib.path] Found {len(valid_indices)} cells inside polygons")
+        
+    except ImportError:
+        # ====================================================================
+        # FALLBACK: Use Numba/custom ray-casting
+        # ====================================================================
+        print("    [FALLBACK] matplotlib not available, using custom ray-casting")
+        
+        results = np.zeros(len(center_lats), dtype=np.int32)
+        
+        for polygon in polygons:
+            poly_arr = np.array(polygon)
+            poly_lats = poly_arr[:, 0]
+            poly_lons = poly_arr[:, 1]
+            
+            # Use optimized batch processing
+            temp_results = np.zeros(len(center_lats), dtype=np.int32)
+            _point_in_polygon_batch(center_lats, center_lons, poly_lats, poly_lons, temp_results)
+            
+            # Combine results (any polygon match)
+            results = np.maximum(results, temp_results)
+        
+        valid_indices = np.where(results == 1)[0]
+        print(f"    Found {len(valid_indices)} cells inside polygons")
     
     # Create GridCell objects
     cells = []
@@ -242,7 +269,6 @@ def generate_grid_optimized(
             center_lon=center_lon,
         ))
     
-    print(f"    Found {len(cells)} cells inside polygons")
     return cells
 
 

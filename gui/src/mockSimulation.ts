@@ -46,10 +46,24 @@ function generateMockOTUGrid(): GeoJSONFeatureCollection<GeoJSONPolygon, OTUCell
         for (let j = -5; j < 5; j++) {
             const lat = centerLat + i * cellSize, lon = centerLon + j * cellSize;
             const q_otu = Math.max(0.1, Math.min(0.95, 0.5 + 0.3 * Math.sin(i * 0.5) + 0.2 * Math.cos(j * 0.5) + (Math.random() - 0.5) * 0.2));
+
+            // Simulate some missing data
+            const hasMissingNDVI = Math.random() < 0.05; // 5% missing NDVI
+            const missing_data = hasMissingNDVI ? ['ndvi'] : [];
+
             features.push({
                 type: 'Feature',
                 geometry: { type: 'Polygon', coordinates: [[[lon, lat], [lon + cellSize, lat], [lon + cellSize, lat + cellSize], [lon, lat + cellSize], [lon, lat]]] },
-                properties: { grid_id: `cell_${i + 5}_${j + 5}`, q_ndvi: Math.random() * 0.8 + 0.1, q_si: Math.random() * 0.6 + 0.3, q_bi: Math.random() * 0.7 + 0.2, q_relief: Math.random() * 0.4 + 0.5, q_otu, q_fire: Math.random() * 0.5 },
+                properties: {
+                    id: `cell_${i + 5}_${j + 5}`,  // ✅ Correct: 'id' not 'grid_id'
+                    q_vi: hasMissingNDVI ? 0.0 : Math.random() * 0.8 + 0.1,  // ✅ Correct: 'q_vi' not 'q_ndvi'
+                    q_si: Math.random() * 0.6 + 0.3,
+                    q_bi: Math.random() * 0.7 + 0.2,
+                    q_relief: Math.random() * 0.4 + 0.5,
+                    q_otu,
+                    is_processed: true,
+                    missing_data  // ✅ Added missing_data array
+                },
             });
         }
     }

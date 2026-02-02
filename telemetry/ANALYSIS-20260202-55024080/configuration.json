@@ -1,13 +1,13 @@
 {
-  "analysis_id": "ANALYSIS-20260130-b0f0497a",
-  "timestamp": "2026-01-30T20:14:51.054198",
+  "analysis_id": "ANALYSIS-20260202-55024080",
+  "timestamp": "2026-02-02T10:05:34.108309",
   "config": {
     "iterations": 100,
     "use_gpu": true,
     "launch_lat": 45.96459,
     "launch_lon": 63.30524,
     "azimuth": 65.0,
-    "target_date": "2023-05-14",
+    "target_date": "2024-09-09",
     "start_date": null,
     "end_date": null,
     "sep_altitude": 43000.0,

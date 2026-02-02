@@ -1,0 +1,103 @@
+Running minimal simulation to verify boundary output...
+[10%] Using Zone Preset: yu24_15...
+  [ 10%] Using Zone Preset: yu24_15...
+[50%] Zone parameters loaded (Monte Carlo skipped)
+  [ 50%] Zone parameters loaded (Monte Carlo skipped)
+[65%] Primary: 27.0x18.0 km
+  [ 65%] Primary: 27.0x18.0 km
+[70%] Fragment: 60.0x30.0 km
+  [ 70%] Fragment: 60.0x30.0 km
+[65%] Primary: 27.0x18.0 km
+  [ 65%] Primary: 27.0x18.0 km
+[70%] Fragment: 60.0x30.0 km
+  [ 70%] Fragment: 60.0x30.0 km
+[75%] Creating ellipse polygons...
+  [ 75%] Creating ellipse polygons...
+[80%] Generating ecological grid...
+  [ 80%] Generating ecological grid...
+[81%] Generating grid...
+  [GRID] Using GPU-optimized generator
+    Testing 8584 potential cells...
+    [matplotlib.path] Found 5652 cells inside polygons
+[85%] Generated 5652 grid cells
+  [GRID] Generated 5652 cells
+[88%] Generated 5652 grid cells
+  [ 88%] Generated 5652 grid cells
+[89%] Calculating Ecological Indices (GEE)...
+  [ 89%] Calculating Ecological Indices (GEE)...
+
+============================================================
+OTU CALCULATION - 2024-09-09
+============================================================
+  Chunks: 5652
+  Weights: Q_Vi=0.35, Q_Si=0.35, Q_Bi=0.3
+  Strict Mode: True
+[89%] OTU: Fetch NDVI (Sentinel-2)...
+  [ 89%] OTU: Fetch NDVI (Sentinel-2)...
+  Using TILED GeoTIFF processing (fast mode)...
+  Using cached NDVI: output\gee_cache\ndvi_2024-09_30m.tif
+  Sampled: 5652/5652 valid (100.0%)
+  ✅ Tiled download complete: 5652 chunks
+[89%] OTU: Fetch Soil Data (SoilGrids)...
+  [ 89%] OTU: Fetch Soil Data (SoilGrids)...
+  Using TILED GeoTIFF processing (fast mode)...
+
+  [DOWNLOAD PLAN] Soil:
+     Resolution: 250m
+     Total size: 490x336 px
+     Estimated: 0.6 MB
+     Tiles: 1
+       Tile 0: 490x336 (0.6 MB)
+  Using cached bdod
+  Sampled: 5652/5652 valid (100.0%)
+  Using cached clay
+  Sampled: 5652/5652 valid (100.0%)
+  Using cached soc
+  Sampled: 5652/5652 valid (100.0%)
+  Using cached nitrogen
+  Sampled: 5652/5652 valid (100.0%)
+  ✅ Tiled download complete: 5652 chunks
+[89%] OTU: Fetch Relief (SRTM/Water)...
+  [ 89%] OTU: Fetch Relief (SRTM/Water)...
+  Using TILED GeoTIFF processing (fast mode)...
+
+  [DOWNLOAD PLAN] Relief:
+     Resolution: 30m
+     Total size: 4084x2803 px
+     Estimated: 43.7 MB
+     Tiles: 2
+       Tile 0: 2042x2803 (21.8 MB)
+       Tile 1: 2042x2803 (21.8 MB)
+  Using cached slope
+  Sampled: 5652/5652 valid (100.0%)
+  Using cached aspect
+  Sampled: 5652/5652 valid (100.0%)
+  Sampled: 5652/5652 valid (100.0%)
+  ✅ Tiled download complete: 5652 chunks
+[89%] OTU: Computing Index for 5652 chunks...
+  [ 89%] OTU: Computing Index for 5652 chunks...
+
+============================================================
+OTU CALCULATION COMPLETE
+============================================================
+  Processed: 5652/5652 chunks
+  Q_OTU Mean: 0.398
+  Q_OTU MAD:  0.007 (Median Absolute Deviation)
+  Q_OTU Range: [0.339, 0.578]
+  Saved: output\otu\otu_2024-09-09.geojson
+[Simulation] Verification: Cell 1 has OTU=0.3888231597135464
+[90%] OTU Calculated. Mean: 0.398
+  [ 90%] OTU Calculated. Mean: 0.398
+[90%] Converting to GeoJSON...
+  [ 90%] Converting to GeoJSON...
+[GeoJSON] Using attached cell attributes for Cell 1: OTU=0.3888231597135464, NDVI=0.10644712299108505
+[95%] Finalizing results...
+  [ 95%] Finalizing results...
+[100%] Done in 56.7s
+  [100%] Done in 56.7s
+
+[SUCCESS] 'boundaries' key found in result.
+Type: <class 'dict'>
+GeoJSON Type: FeatureCollection
+Features: 2
+First Feature Properties: {'center_lat': 47.333333333333336, 'center_lon': 66.775, 'semi_major_km': 27.0, 'semi_minor_km': 18.0, 'angle_deg': 75.0, 'type': 'primary', 'name': 'Primary Zone'}

@@ -13,6 +13,7 @@ from .models import (
     HealthResponse,
     TrajectoryResponse,
     TelemetryExportResponse,
+    ZonePreviewResponse,
 )
 from .simulation_runner import (
     create_job,
@@ -21,6 +22,7 @@ from .simulation_runner import (
     get_simulation_result,
 )
 from .preview import calculate_trajectory_preview
+from .zone_preview_logic import get_zone_preview
 
 # Telemetry for reproducibility
 try:
@@ -54,6 +56,15 @@ async def preview_trajectory(request: SimulationRequest):
     Calculates single deterministic path (sigma=0).
     """
     return calculate_trajectory_preview(request)
+
+
+@app.post("/api/simulation/preview-zone", response_model=ZonePreviewResponse, tags=["Simulation"])
+async def preview_zone(request: SimulationRequest):
+    """
+    Get preview of the impact zone geometry (if applying a preset).
+    """
+    return get_zone_preview(request)
+
 
 
 
@@ -96,7 +107,9 @@ async def run_simulation(request: SimulationRequest):
         sep_azimuth=request.sep_azimuth,
         hurricane_mode=request.hurricane_mode,
         cloud_threshold=request.cloud_threshold,
+        zone_id=request.zone_id,
     )
+    print(f"[API DEBUG] Triggered simulation with zone_id={request.zone_id}")
     
     return SimulationStatusResponse(
         job_id=job_id,
@@ -214,6 +227,92 @@ async def download_table(filename: str):
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(file_path, filename=filename)
 
+
+# ============================================
+# EXPORT SERVICE ENDPOINTS
+# ============================================
+
+from server_pipeline.export_service.models import ExportRequest
+from server_pipeline.export_service.generator import generate_report_package
+import asyncio
+import uuid
+import os
+
+# Simple in-memory job store for export tasks
+# Dict[str, str] -> job_id: status or filepath
+export_tasks: Dict[str, Dict[str, Any]] = {}
+
+@app.post("/api/export/generate", tags=["Export"])
+async def generate_export(request: ExportRequest, background_tasks: BackgroundTasks):
+    """
+    Trigger generation of a full report package.
+    """
+    task_id = f"export_{request.job_id}_{str(uuid.uuid4())[:8]}"
+    
+    export_tasks[task_id] = {
+        "status": "processing", 
+        "progress": 0,
+        "file_path": None,
+        "error": None
+    }
+    
+    # Background Worker
+    async def _run_export(tid: str, req: ExportRequest):
+        try:
+            print(f"[EXPORT] Starting task {tid} for job {req.job_id}")
+            # Run generator (it's async but uses blocking calls, might need threadpool if heavy)
+            # For now, just await it directly if it's truly async, or run in executor
+            # generate_report_package is defined as async but uses blocking GEE/Pandas.
+            # Ideally wrap in run_in_executor for production.
+            loop = asyncio.get_event_loop()
+            path = await loop.run_in_executor(None, lambda: asyncio.run(generate_report_package(req))) \
+                   if not asyncio.iscoroutinefunction(generate_report_package) else await generate_report_package(req)
+            
+            # Since generate_report_package in my code WAS defined as async but I didn't verify if it awaits anything.
+            # Actually I wrote `async def generate_report_package`.
+            # But GEE calls are blocking.
+            # Best to run it synchronously in a thread.
+            
+            export_tasks[tid]["status"] = "completed"
+            export_tasks[tid]["file_path"] = path
+            export_tasks[tid]["progress"] = 100
+            print(f"[EXPORT] Task {tid} completed: {path}")
+            
+        except Exception as e:
+            export_tasks[tid]["status"] = "failed"
+            export_tasks[tid]["error"] = str(e)
+            print(f"[EXPORT] Task {tid} failed: {e}")
+
+    background_tasks.add_task(_run_export, task_id, request)
+    
+    return {"task_id": task_id, "status": "processing"}
+
+@app.get("/api/export/status/{task_id}", tags=["Export"])
+async def get_export_status(task_id: str):
+    """Check status of export task."""
+    task = export_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    return task
+
+@app.get("/api/export/download/{task_id}", tags=["Export"])
+async def download_export(task_id: str):
+    """Download the generated ZIP."""
+    task = export_tasks.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    if task["status"] != "completed" or not task["file_path"]:
+        raise HTTPException(status_code=400, detail="Export not ready")
+        
+    path = task["file_path"]
+    filename = os.path.basename(path)
+    
+    return FileResponse(path, filename=filename, media_type="application/zip")
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

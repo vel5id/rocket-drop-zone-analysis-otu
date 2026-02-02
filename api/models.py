@@ -139,3 +139,12 @@ class TelemetryExportResponse(BaseModel):
     export_path: str
     message: str
     files_included: list[str] = []
+
+
+class ZonePreviewResponse(BaseModel):
+    """Response for zone geometry preview."""
+    zone_id: Optional[str] = None
+    primary_polygon: Optional[GeoJSONFeature] = None
+    fragment_polygon: Optional[GeoJSONFeature] = None
+    message: Optional[str] = None
+

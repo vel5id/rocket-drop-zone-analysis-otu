@@ -1,5 +1,7 @@
 import { Globe, Moon, Rocket, Settings } from 'lucide-react';
 import React from 'react';
+import { GeoJSONFeatureCollection, GeoJSONPolygon, OTUCellProperties } from '../../types';
+import ExportButton from '../common/ExportButton';
 
 interface HeaderProps {
     isSimulating: boolean;
@@ -9,6 +11,8 @@ interface HeaderProps {
     isDemoMode: boolean;
     baseLayer: 'satellite' | 'dark' | 'terrain' | 'streets';
     setBaseLayer: (layer: 'satellite' | 'dark' | 'terrain' | 'streets') => void;
+    otuGrid?: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties>;
+    targetDate?: string;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -18,7 +22,9 @@ const Header: React.FC<HeaderProps> = ({
     progressMessage,
     isDemoMode,
     baseLayer,
-    setBaseLayer
+    setBaseLayer,
+    otuGrid,
+    targetDate
 }) => {
     return (
         <header style={{ position: 'fixed', top: '28px', left: '50%', transform: 'translateX(-50%)', width: '92%', maxWidth: '1000px', height: '60px', zIndex: 50 }}
@@ -65,6 +71,11 @@ const Header: React.FC<HeaderProps> = ({
                         <Settings size={18} />
                     </button>
                 </div>
+
+                <div className="h-8 w-px bg-[rgba(255,255,255,0.1)]"></div>
+
+                {/* Export Button */}
+                <ExportButton otuGrid={otuGrid} date={targetDate} />
             </div>
         </header>
     );

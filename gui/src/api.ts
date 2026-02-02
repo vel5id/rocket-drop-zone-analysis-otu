@@ -6,7 +6,9 @@
 import {
     SimulationConfig,
     SimulationResult,
-    SimulationStatus
+    SimulationStatus,
+    TrajectoryResponse,
+    ZonePreviewResponse
 } from './types';
 
 const API_BASE_URL = 'http://127.0.0.1:8000/api';
@@ -87,6 +89,24 @@ export async function getTrajectoryPreview(config: SimulationConfig): Promise<Tr
 }
 
 /**
+ * Get zone geometry preview.
+ */
+export async function getZonePreview(config: SimulationConfig): Promise<ZonePreviewResponse> {
+    const response = await fetch(`${API_BASE_URL}/simulation/preview-zone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            ...config,
+            zone_id: config.zone_id,
+        }),
+    });
+    if (!response.ok) {
+        throw new Error(`Zone preview failed: ${response.statusText}`);
+    }
+    return response.json();
+}
+
+/**
  * Poll simulation status.
  */
 export async function getSimulationStatus(jobId: string): Promise<SimulationStatus> {
@@ -157,9 +177,48 @@ export async function runAndWaitSimulation(
     return pollSimulation(job_id, onProgress);
 }
 
+
 /**
  * Download a supplementary table file.
  */
 export function getTableDownloadUrl(filename: string): string {
     return `${API_BASE_URL}/outputs/tables/${filename}`;
+}
+
+// ============================================
+// EXPORT SERVICE
+// ============================================
+
+export interface ExportRequest {
+    job_id: string;
+    analysis_id?: string;
+    format?: 'csv' | 'excel';
+    include_time_series?: boolean;
+}
+
+export interface ExportStatus {
+    status: 'processing' | 'completed' | 'failed';
+    progress: number;
+    file_path?: string;
+    error?: string;
+}
+
+export async function generateExport(request: ExportRequest): Promise<{ task_id: string }> {
+    const response = await fetch(`${API_BASE_URL}/export/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+    });
+    if (!response.ok) throw new Error('Failed to start export');
+    return response.json();
+}
+
+export async function getExportStatus(taskId: string): Promise<ExportStatus> {
+    const response = await fetch(`${API_BASE_URL}/export/status/${taskId}`);
+    if (!response.ok) throw new Error('Failed to check status');
+    return response.json();
+}
+
+export function getExportDownloadUrl(taskId: string): string {
+    return `${API_BASE_URL}/export/download/${taskId}`;
 }

@@ -9,8 +9,39 @@ from typing import List, Tuple
 try:
     from matplotlib.path import Path
     HAS_MATPLOTLIB = True
-except ImportError:
+except ImportError as e:
+    print(f"[GRID-WARNING] Matplotlib import failed: {e}")
     HAS_MATPLOTLIB = False
+
+import json
+
+def dump_debug_polygons(polygons: List[List[Tuple[float, float]]]):
+    """Dump polygons to GeoJSON for debug."""
+    features = []
+    for i, poly in enumerate(polygons):
+        # Convert (lat, lon) to (lon, lat)
+        coords = [[lon, lat] for lat, lon in poly]
+        # Close loop
+        if coords[0] != coords[-1]:
+            coords.append(coords[0])
+            
+        features.append({
+            "type": "Feature",
+            "properties": {"id": f"poly_{i}"},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [coords]
+            }
+        })
+    
+    geojson = {"type": "FeatureCollection", "features": features}
+    try:
+        with open("server_debug_polygons.geojson", "w") as f:
+            json.dump(geojson, f)
+        print("[GRID-DEBUG] Dumped server_debug_polygons.geojson")
+    except Exception as e:
+        print(f"[GRID-DEBUG] Failed to dump polygons: {e}")
+
 
 
 @dataclass
@@ -32,7 +63,7 @@ def create_ellipse_polygon(ellipse: dict, scale: float = 1.0, num_points: int = 
     b_km = ellipse["semi_minor_km"] * scale
     angle_north = ellipse.get("angle_deg", 0)
     
-    # Convert km to degrees
+    # Convert km to degrees coefficients
     lat_rad = math.radians(clat)
     deg_per_km_lat = 1 / 111.0
     deg_per_km_lon = 1 / (111.0 * math.cos(lat_rad))
@@ -42,15 +73,19 @@ def create_ellipse_polygon(ellipse: dict, scale: float = 1.0, num_points: int = 
     
     points = []
     for t in np.linspace(0, 2*np.pi, num_points):
-        # Ellipse in local coords
-        x = a_km * deg_per_km_lon * np.cos(t)
-        y = b_km * deg_per_km_lat * np.sin(t)
+        # Ellipse in local coords (km)
+        x_km = a_km * np.cos(t)
+        y_km = b_km * np.sin(t)
         
-        # Rotate
-        xr = x * np.cos(math_angle) - y * np.sin(math_angle)
-        yr = x * np.sin(math_angle) + y * np.cos(math_angle)
+        # Rotate in km space
+        xr_km = x_km * np.cos(math_angle) - y_km * np.sin(math_angle)
+        yr_km = x_km * np.sin(math_angle) + y_km * np.cos(math_angle)
         
-        points.append((clat + yr, clon + xr))
+        # Convert to degrees
+        dlat = yr_km * deg_per_km_lat
+        dlon = xr_km * deg_per_km_lon
+        
+        points.append((clat + dlat, clon + dlon))
     
     return points
 
@@ -107,6 +142,9 @@ def generate_grid_in_polygons(
     if not polygons:
         return []
 
+    # Proactive debug dump
+    dump_debug_polygons(polygons)
+
     # Get merged bounding box
     if len(polygons) == 1:
         min_lat, max_lat, min_lon, max_lon = get_polygon_bounds(polygons[0])
@@ -127,7 +165,9 @@ def generate_grid_in_polygons(
     # OPTIMIZED VECTORIZED PATH (Matplotlib)
     # ---------------------------------------------------------
     if HAS_MATPLOTLIB:
-        paths = [Path(p) for p in polygons]
+        # Convert polygons from (lat, lon) to (x, y) = (lon, lat) for matplotlib
+        # matplotlib.path.Path expects (x, y) coordinates
+        paths = [Path([(lon, lat) for lat, lon in p]) for p in polygons]
         
         # Determine strict grid steps
         lat_steps = int(np.ceil((max_lat - min_lat) / cell_size_lat))
@@ -145,13 +185,13 @@ def generate_grid_in_polygons(
         # Meshgrid of centers
         lon_grid_c, lat_grid_c = np.meshgrid(lons_c, lats_c)
         
-        # Flatten
-        points_flat = np.column_stack((lat_grid_c.flatten(), lon_grid_c.flatten()))
+        # Flatten and convert to (x, y) = (lon, lat) for matplotlib
+        points_flat = np.column_stack((lon_grid_c.flatten(), lat_grid_c.flatten()))
         
         # Check containment
         inside_mask = np.zeros(len(points_flat), dtype=bool)
         for path in paths:
-            # path.contains_points expects (N, 2) array
+            # path.contains_points expects (N, 2) array in (x, y) format
             inside_mask |= path.contains_points(points_flat)
             
         valid_indices = np.where(inside_mask)[0]
@@ -164,8 +204,9 @@ def generate_grid_in_polygons(
         d_lon = cell_size_lon
         
         for idx in valid_indices:
-            c_lat = points_flat[idx, 0]
-            c_lon = points_flat[idx, 1]
+            # points_flat is now (lon, lat) format
+            c_lon = points_flat[idx, 0]  # x = lon
+            c_lat = points_flat[idx, 1]  # y = lat
             
             cells.append(GridCell(
                 min_lat=c_lat - d_lat/2,

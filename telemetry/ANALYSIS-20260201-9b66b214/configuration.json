@@ -1,8 +1,8 @@
 {
-  "analysis_id": "ANALYSIS-20260130-55024080",
-  "timestamp": "2026-01-30T20:26:13.159320",
+  "analysis_id": "ANALYSIS-20260201-9b66b214",
+  "timestamp": "2026-02-01T10:48:39.647095",
   "config": {
-    "iterations": 100,
+    "iterations": 1000,
     "use_gpu": true,
     "launch_lat": 45.96459,
     "launch_lon": 63.30524,

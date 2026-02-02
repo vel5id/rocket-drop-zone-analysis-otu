@@ -25,13 +25,14 @@ export interface ImpactPointProperties {
 }
 
 export interface OTUCellProperties {
-    grid_id: string;
-    q_ndvi: number;
-    q_si: number;
-    q_bi: number;
-    q_relief: number;
-    q_otu: number;
-    q_fire: number;
+    id: string;                // ✅ Matches backend
+    q_vi: number;              // ✅ NDVI (was q_ndvi)
+    q_si: number;              // ✅ Soil strength
+    q_bi: number;              // ✅ Soil quality
+    q_relief: number;          // ✅ Relief factor
+    q_otu: number;             // ✅ OTU index
+    is_processed: boolean;     // ✅ Processing status
+    missing_data: string[];    // ✅ Array of missing data types
 }
 
 export interface GeoJSONGeometry {
@@ -61,7 +62,9 @@ export interface UIStats {
     avgOtu: number;
     primaryEllipse: { a: number; b: number; angle: number };
     fragmentEllipse: { a: number; b: number; angle: number };
+    jobId: string; // ✅ Added for export
 }
+
 
 // Stats from the API
 export interface APISimulationStats {
@@ -112,6 +115,13 @@ export interface TrajectoryResponse {
     impact_point: TrajectoryPoint;
 }
 
+export interface ZonePreviewResponse {
+    zone_id?: string;
+    primary_polygon?: any; // GeoJSONFeature
+    fragment_polygon?: any; // GeoJSONFeature
+    message?: string;
+}
+
 export interface SimulationResult {
     job_id: string;
     status: string;
@@ -120,6 +130,7 @@ export interface SimulationResult {
     fragment_ellipse?: EllipseData;
     impact_points?: GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties>;
     otu_grid?: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties>;
+    boundaries?: GeoJSONFeatureCollection<GeoJSONPolygon, { type: string; name: string }>;
     stats?: APISimulationStats;
     error?: string;
 }
@@ -132,6 +143,7 @@ export interface MapViewProps {
     fragmentEllipse?: EllipseData;
     impactPoints?: GeoJSONFeatureCollection<GeoJSONPoint, ImpactPointProperties>;
     otuGrid?: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties>;
+    boundaries?: GeoJSONFeatureCollection<GeoJSONPolygon, { type: string; name: string }>;
     // New prop for trajectory preview
     previewTrajectory?: TrajectoryPoint[];
     activeLayers: ActiveLayers;

@@ -29,6 +29,13 @@ try:
 except ImportError:
     ee = None
 
+# Tile-based GEE processing (optional, requires rasterio)
+try:
+    from gee.local_processor import fetch_ndvi_tiled, fetch_soil_tiled, fetch_relief_tiled
+    HAS_TILED_PROCESSOR = True
+except ImportError:
+    HAS_TILED_PROCESSOR = False
+
 from otu.chunk_manager import ChunkManager, Chunk
 from config.otu_config import OTUConfig
 from otu.otu_logic import (
@@ -54,11 +61,17 @@ class OTUCalculator:
     """
     chunk_manager: ChunkManager
     output_dir: Path = field(default_factory=lambda: Path("output/otu"))
+    use_tiled_download: bool = field(default=True)  # Enable tile-based downloads by default
     
     def __post_init__(self):
         """Initialize calculator."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self._ee_initialized = False
+        
+        # Check if tiled download is available
+        if self.use_tiled_download and not HAS_TILED_PROCESSOR:
+            print("  [WARN] Tiled processor not available (install rasterio), using batch mode")
+            self.use_tiled_download = False
 
     @staticmethod
     def _sanitize_float(val: Any, default: float = 0.0) -> float:
@@ -246,6 +259,40 @@ class OTUCalculator:
         progress_callback: Optional[Any] = None,
     ) -> Dict[str, float]:
         """Fetch NDVI values for all chunks."""
+        
+        # OPTIMIZATION: Use tiled download if available
+        if self.use_tiled_download:
+            print("  Using TILED GeoTIFF processing (fast mode)...")
+            try:
+                ndvi_array = fetch_ndvi_tiled(
+                    grid_cells=list(self.chunk_manager.chunks),
+                    target_date=target_date,
+                    cache_dir=str(self.output_dir.parent / "gee_cache"),
+                    scale_m=30,
+                    cloud_threshold=OTUConfig.gee.cloud_threshold
+                )
+                
+                # Convert array to dict
+                ndvi_data = {}
+                for i, chunk in enumerate(self.chunk_manager.chunks):
+                    val = ndvi_array[i] if i < len(ndvi_array) else 0.0
+                    val = self._sanitize_float(val, default=0.0)
+                    val = max(0.0, min(1.0, val))
+                    
+                    if val == 0.0:
+                        chunk.missing_data.append("ndvi")
+                    
+                    ndvi_data[chunk.id] = val
+                    chunk.q_vi = val
+                
+                print(f"  ✅ Tiled download complete: {len(ndvi_data)} chunks")
+                return ndvi_data
+                
+            except Exception as e:
+                print(f"  [WARN] Tiled download failed: {e}, falling back to batch mode")
+                self.use_tiled_download = False  # Disable for this session
+        
+        # FALLBACK: Original batch processing
         if not self._ee_initialized:
             print("  Warning: Earth Engine not available, using mock data")
             return self._generate_mock_ndvi_data()
@@ -270,21 +317,26 @@ class OTUCalculator:
                 .filter(ee.Filter.lt("CLOUDY_PIXEL_PERCENTAGE", OTUConfig.gee.cloud_threshold))
             )
             
-            # Count images
+            # Count images and log fallback tiers
             try:
                 img_count = s2.size().getInfo()
                 msg = f"Aggregating {img_count} Sentinel Scenes ({OTUConfig.gee.cloud_threshold}% cloud risk)..."
                 if progress_callback: progress_callback(msg)
                 print(f"  [GEE] {msg}")
-            except:
-                pass
+                
+                # Also check fallback tiers
+                if img_count == 0:
+                    print(f"  [GEE WARNING] No images in primary window ({start_str} to {end_str})")
+            except Exception as e:
+                print(f"  [GEE WARNING] Could not count images: {e}")
             
             # Apply cloud mask using SCL (Scene Classification Layer)
             # 0: No Data, 1: Saturated, 2: Dark, 3: Cloud Shadow, 8: Cloud Medium, 9: Cloud High, 10: Cirrus, 11: Snow
-            # Keep: 4: Vegetation, 5: Bare Soil, 6: Water, 7: Unclassified
+            # Keep: 3: Cloud Shadow (often has valid data), 4: Vegetation, 5: Bare Soil, 6: Water, 7: Unclassified
             def mask_clouds(image):
                 scl = image.select("SCL")
-                mask = scl.eq(4).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
+                # RELAXED MASK: Include Cloud Shadow (3) to avoid removing all data
+                mask = scl.eq(3).Or(scl.eq(4)).Or(scl.eq(5)).Or(scl.eq(6)).Or(scl.eq(7))
                 return image.updateMask(mask)
             
             s2_masked = s2.map(mask_clouds)
@@ -318,14 +370,13 @@ class OTUCalculator:
             
             ndvi_annual = s2_annual.normalizedDifference(["B8", "B4"]).rename("NDVI")
             
-            # Combine: Main -> Fallback 1 -> Fallback 2
+            # Combine: Main -> Fallback 1 -> Fallback 2 -> Constant Background
+            # Use unmask() chain to fill masked pixels with fallback data
             combined_ndvi = ndvi.unmask(ndvi_fallback).unmask(ndvi_annual)
             
-            # AXIOM SAFEGUARD: Infinite Background
-            # Instead of unmask(0.0) which relies on footprint, use a constant 0.0 image
-            # and blend valid data on top. This guarantees mathematically that a pixel exists everywhere.
-            background = ee.Image.constant(0.0).rename("NDVI")
-            ndvi_final = background.blend(combined_ndvi)
+            # CRITICAL FIX: Use unmask(0.0) instead of blend()
+            # blend() only works where there's valid data, unmask() fills ALL masked pixels
+            ndvi_final = combined_ndvi.unmask(0.0)
             
             ndvi_data = {}
             chunks_iter = self.chunk_manager.chunks
@@ -390,11 +441,13 @@ class OTUCalculator:
                     # Parse Results
                     for feat in results['features']:
                         c_id = feat['properties']['chunk_id']
-                        val = feat['properties'].get('NDVI')
+                        # CRITICAL FIX: reduceRegions with Reducer.mean() returns 'mean', not band name
+                        val = feat['properties'].get('mean')
                         
                         chunk = next((c for c in batch if c.id == c_id), None)
                         
                         if val is None:
+                            null_count += 1  # FIX: Actually increment the counter
                             # PURPLE MODE: Flag as missing, safe default 0.0
                             if chunk:
                                 chunk.missing_data.append("ndvi")
@@ -435,6 +488,39 @@ class OTUCalculator:
         """
         Fetch raw soil data (BD, Clay, SOC, Nitrogen) for all chunks.
         """
+        
+        # OPTIMIZATION: Use tiled download if available
+        if self.use_tiled_download:
+            print("  Using TILED GeoTIFF processing (fast mode)...")
+            try:
+                soil_array = fetch_soil_tiled(
+                    grid_cells=list(self.chunk_manager.chunks),
+                    cache_dir=str(self.output_dir.parent / "gee_cache"),
+                    scale_m=250
+                )
+                
+                # Convert array to dict
+                # soil_array is [n_chunks, 4] -> [bd, clay, soc, n]
+                soil_data = {}
+                for i, chunk in enumerate(self.chunk_manager.chunks):
+                    if i < len(soil_array):
+                        soil_data[chunk.id] = {
+                            "bd": float(soil_array[i, 0]),
+                            "clay": float(soil_array[i, 1]),
+                            "soc": float(soil_array[i, 2]),
+                            "n": float(soil_array[i, 3]),
+                        }
+                    else:
+                        soil_data[chunk.id] = {"bd": 1300, "clay": 200, "soc": 50, "n": 2}
+                
+                print(f"  ✅ Tiled download complete: {len(soil_data)} chunks")
+                return soil_data
+                
+            except Exception as e:
+                print(f"  [WARN] Tiled download failed: {e}, falling back to batch mode")
+                self.use_tiled_download = False
+        
+        # FALLBACK: Original batch processing
         if not self._ee_initialized:
             return self._generate_mock_soil_data()
         
@@ -551,6 +637,37 @@ class OTUCalculator:
         """
         Fetch raw relief data (Slope, Water) for all chunks.
         """
+        
+        # OPTIMIZATION: Use tiled download if available
+        if self.use_tiled_download:
+            print("  Using TILED GeoTIFF processing (fast mode)...")
+            try:
+                relief_array = fetch_relief_tiled(
+                    grid_cells=list(self.chunk_manager.chunks),
+                    cache_dir=str(self.output_dir.parent / "gee_cache"),
+                    scale_m=30
+                )
+                
+                # Convert array to dict
+                # relief_array is [n_chunks, 2] -> [slope, water]
+                relief_data = {}
+                for i, chunk in enumerate(self.chunk_manager.chunks):
+                    if i < len(relief_array):
+                        relief_data[chunk.id] = {
+                            "slope": float(relief_array[i, 0]),
+                            "water": float(relief_array[i, 1]),
+                        }
+                    else:
+                        relief_data[chunk.id] = {"slope": 0, "water": 0}
+                
+                print(f"  ✅ Tiled download complete: {len(relief_data)} chunks")
+                return relief_data
+                
+            except Exception as e:
+                print(f"  [WARN] Tiled download failed: {e}, falling back to batch mode")
+                self.use_tiled_download = False
+        
+        # FALLBACK: Original batch processing
         if not self._ee_initialized:
             return self._generate_mock_relief_data()
         
@@ -627,12 +744,13 @@ class OTUCalculator:
                         orig_water = data["water"]
 
                         data["slope"] = self._sanitize_float(orig_slope, 0)
-                        data["water"] = self._sanitize_float(orig_water, 0)
+                        data["water"] = self._sanitize_float(orig_water, 0)  # None for water is OK (no water)
 
+                        # Only flag as missing if SLOPE is invalid
+                        # Water=None is expected in areas without water bodies
                         is_invalid_slope = (orig_slope is None) or (isinstance(orig_slope, float) and (math.isnan(orig_slope) or math.isinf(orig_slope)))
-                        is_invalid_water = (orig_water is None) or (isinstance(orig_water, float) and (math.isnan(orig_water) or math.isinf(orig_water)))
 
-                        if is_invalid_slope or is_invalid_water:
+                        if is_invalid_slope:
                              chunk = next((c for c in batch if c.id == c_id), None)
                              if chunk and "relief" not in chunk.missing_data:
                                  chunk.missing_data.append("relief")

@@ -18,9 +18,10 @@ from dataclasses import dataclass, field
 # Add parent to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 from server_pipeline.ellipse import compute_ellipse_safe, filter_outliers_iqr
 from server_pipeline.grid_generator import generate_grid_safe, create_ellipse_polygons
-from server_pipeline.geojson import points_to_geojson, grid_to_geojson
+from server_pipeline.geojson import points_to_geojson, grid_to_geojson, ellipse_to_geojson
 
 
 @dataclass
@@ -30,6 +31,7 @@ class SimulationResult:
     fragment_ellipse: Optional[Dict] = None
     impact_points: Dict = field(default_factory=dict)
     otu_grid: Dict = field(default_factory=dict)
+    boundaries: Dict = field(default_factory=dict)
     stats: Dict = field(default_factory=dict)
     date_config: Dict = field(default_factory=dict)
     
@@ -39,6 +41,7 @@ class SimulationResult:
             "fragment_ellipse": self.fragment_ellipse,
             "impact_points": self.impact_points,
             "otu_grid": self.otu_grid,
+            "boundaries": self.boundaries,
             "stats": self.stats,
             "date_config": self.date_config,
         }
@@ -115,29 +118,22 @@ def run_simulation_safe(
         # If "all" or general, use both. 
         # For this implementation, we map specific IDs to the 15/25 split
         
-        # Default behavior for now: Load both Zone 15 and 25 as Primary/Fragment
-        # strict mapping implies:
-        z15 = YU24_ZONES["yu24_15"]
-        z25 = YU24_ZONES["yu24_25"]
-        
-        # Construct ellipse dicts directly
-        primary_ellipse = {
-            "center_lat": z15.center_lat,
-            "center_lon": z15.center_lon,
-            "semi_major_km": z15.semi_major_km,
-            "semi_minor_km": z15.semi_minor_km,
-            "angle_deg": z15.angle_deg,
-        }
-        
-        fragment_ellipse = {
-            "center_lat": z25.center_lat,
-            "center_lon": z25.center_lon,
-            "semi_major_km": z25.semi_major_km,
-            "semi_minor_km": z25.semi_minor_km,
-            "angle_deg": z25.angle_deg,
-        }
-        
-        update(50, "Zone parameters loaded (Monte Carlo skipped)")
+        if zone_id in YU24_ZONES:
+            zone_def = YU24_ZONES[zone_id]
+            update(10, f"Using Zone Preset: {zone_def.name}...")
+            
+            # Construct ellipse dict directly from selected zone
+            primary_ellipse = {
+                "center_lat": zone_def.center_lat,
+                "center_lon": zone_def.center_lon,
+                "semi_major_km": zone_def.semi_major_km,
+                "semi_minor_km": zone_def.semi_minor_km,
+                "angle_deg": zone_def.angle_deg,
+            }
+            
+            fragment_ellipse = None
+            
+            update(50, f"Zone parameters loaded for {zone_def.name}")
         
         # Skip straight to Grid Generation
         # (filtered_fragments remain empty as we don't have points)
@@ -276,6 +272,9 @@ def run_simulation_safe(
                      cell.q_bi = chunk.q_bi
                      cell.q_relief = chunk.q_relief
                      cell.q_otu = chunk.q_otu
+                     cell.is_processed = chunk.is_processed
+                     cell.missing_data = chunk.missing_data  # ✅ Added
+                     cell.id = chunk.id  # ✅ Added for proper ID
         
         # Verification Log
         if grid_cells:
@@ -305,6 +304,18 @@ def run_simulation_safe(
     # Grid to GeoJSON (without OTU values for now - can be added later)
     grid_geojson = grid_to_geojson(grid_cells)
     
+    # Generate Ellipse Boundaries GeoJSON
+    boundary_features = []
+    if primary_ellipse:
+        boundary_features.append(ellipse_to_geojson(primary_ellipse, properties={"type": "primary", "name": "Primary Zone"}))
+    if fragment_ellipse:
+        boundary_features.append(ellipse_to_geojson(fragment_ellipse, properties={"type": "fragment", "name": "Fragment Zone"}))
+    
+    boundary_geojson = {
+        "type": "FeatureCollection",
+        "features": boundary_features
+    }
+    
     # =========================================================================
     # STEP 6: Build Result
     # =========================================================================
@@ -317,6 +328,7 @@ def run_simulation_safe(
         fragment_ellipse=fragment_ellipse,
         impact_points=impact_points_geojson,
         otu_grid=grid_geojson,
+        boundaries=boundary_geojson,
         stats={
             "iterations": iterations,
             "simulation_time_s": round(sim_time, 2),

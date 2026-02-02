@@ -46,13 +46,20 @@ def generate_grid_safe(
     if progress_callback:
         progress_callback(81, "Generating grid...")
     
-    # Try to use optimized version from run_otu_pipeline
+    # Try to use optimized version from grid.polygon_grid (Matplotlib-based)
     try:
-        from run_otu_pipeline import generate_grid_optimized
-        print("  [GRID] Using GPU-optimized generator")
-        grid = generate_grid_optimized(polygons, cell_size_km)
-    except ImportError:
-        print("  [GRID] Using numpy fallback")
+        from grid.polygon_grid import generate_grid_in_polygons
+        print("  [GRID-DEBUG] Using optimized generator from grid.polygon_grid...")
+        grid = generate_grid_in_polygons(polygons, cell_size_km)
+        print(f"  [GRID-DEBUG] Optimized generator returned {len(grid)} cells")
+        
+    except ImportError as e:
+        print(f"  [GRID-DEBUG] grid.polygon_grid import failed: {e}")
+        print("  [GRID-DEBUG] Using numpy fallback")
+        grid = _generate_grid_numpy(polygons, cell_size_km)
+    except Exception as e:
+        print(f"  [GRID-DEBUG] generate_grid_in_polygons execution failed: {e}")
+        print("  [GRID-DEBUG] Using numpy fallback")
         grid = _generate_grid_numpy(polygons, cell_size_km)
     
     # Apply safety cap
@@ -149,23 +156,59 @@ def _generate_grid_numpy(
         
         return cells
         
-    except ImportError:
-        # Fallback: simple bounding box grid (no polygon check)
-        print("  [GRID] matplotlib not available, using simple grid")
-        cells = []
+        return cells
         
+    except ImportError as e:
+        # Fallback: grid with manual polygon check
+        print(f"  [GRID-DEBUG] matplotlib import failed in fallback: {e}")
+        print("  [GRID-DEBUG] Using manual ray-casting (SLOW & RISKY)")
+        
+        def point_in_polygon(lat: float, lon: float, polygon: List[Tuple[float, float]]) -> bool:
+            """
+            Ray casting algorithm for point-in-polygon test.
+            Polygon is list of (lat, lon) tuples.
+            """
+            inside = False
+            n = len(polygon)
+            p1_lat, p1_lon = polygon[0]
+            
+            for i in range(1, n + 1):
+                p2_lat, p2_lon = polygon[i % n]
+                
+                # Ray casting along longitude axis
+                if lon > min(p1_lon, p2_lon):
+                    if lon <= max(p1_lon, p2_lon):
+                        if lat <= max(p1_lat, p2_lat):
+                            if p1_lon != p2_lon:
+                                lat_inters = (lon - p1_lon) * (p2_lat - p1_lat) / (p2_lon - p1_lon) + p1_lat
+                            if p1_lat == p2_lat or lat <= lat_inters:
+                                inside = not inside
+                
+                p1_lat, p1_lon = p2_lat, p2_lon
+            
+            return inside
+        
+        cells = []
         lat = min_lat + cell_size_lat/2
         while lat < max_lat and len(cells) < MAX_GRID_CELLS:
             lon = min_lon + cell_size_lon/2
             while lon < max_lon and len(cells) < MAX_GRID_CELLS:
-                cells.append(GridCell(
-                    min_lat=lat - cell_size_lat/2,
-                    max_lat=lat + cell_size_lat/2,
-                    min_lon=lon - cell_size_lon/2,
-                    max_lon=lon + cell_size_lon/2,
-                    center_lat=lat,
-                    center_lon=lon,
-                ))
+                # Check if center point is inside ANY polygon
+                inside_any = False
+                for poly in polygons:
+                    if point_in_polygon(lat, lon, poly):
+                        inside_any = True
+                        break
+                
+                if inside_any:
+                    cells.append(GridCell(
+                        min_lat=lat - cell_size_lat/2,
+                        max_lat=lat + cell_size_lat/2,
+                        min_lon=lon - cell_size_lon/2,
+                        max_lon=lon + cell_size_lon/2,
+                        center_lat=lat,
+                        center_lon=lon,
+                    ))
                 lon += cell_size_lon
             lat += cell_size_lat
         

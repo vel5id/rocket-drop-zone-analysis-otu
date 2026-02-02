@@ -1,7 +1,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import React, { useEffect } from 'react';
-import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Polygon, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, GeoJSON, LayerGroup, MapContainer, Polyline, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import { EllipseData, GeoJSONFeatureCollection, GeoJSONPoint, GeoJSONPolygon, ImpactPointProperties, MapViewProps, OTUCellProperties } from '../../types';
 import { generateEllipsePoints, getOTUColor } from '../../utils';
 
@@ -92,24 +92,95 @@ const OTULayer = React.memo(({ grid }: { grid: GeoJSONFeatureCollection<GeoJSONP
         };
     };
 
-    // Binding popups
+    // Binding popups with enhanced missing data display
     const onEachFeature = (feature: any, layer: any) => {
         if (feature.properties) {
-            const missing = feature.properties.missing_data;
-            const missingHtml = (missing && missing.length > 0)
-                ? `<div style="color: #9333ea; font-weight: bold;">MISSING: ${missing.join(', ')}</div>`
-                : '';
+            const props = feature.properties;
+            const missing = props.missing_data;
+            const hasMissing = missing && missing.length > 0;
+
+            // Build missing data section
+            let missingHtml = '';
+            if (hasMissing) {
+                const missingItems = missing.map((item: string) => {
+                    const icon = item === 'ndvi' ? '🌿' : item === 'soil' ? '🏔️' : '⛰️';
+                    const label = item === 'ndvi' ? 'NDVI' : item === 'soil' ? 'Soil' : 'Relief';
+                    return `<div style="color: #9333ea; margin: 2px 0;">${icon} ${label}</div>`;
+                }).join('');
+
+                missingHtml = `
+                    <div style="
+                        background: #faf5ff; 
+                        border: 2px solid #9333ea; 
+                        border-radius: 6px; 
+                        padding: 8px; 
+                        margin: 8px 0;
+                    ">
+                        <div style="
+                            color: #9333ea; 
+                            font-weight: bold; 
+                            margin-bottom: 4px;
+                            font-size: 13px;
+                        ">⚠️ MISSING DATA:</div>
+                        ${missingItems}
+                        <div style="
+                            color: #7c3aed; 
+                            font-size: 11px; 
+                            margin-top: 4px;
+                            font-style: italic;
+                        ">Using fallback defaults</div>
+                    </div>
+                `;
+            }
 
             const content = `
-                <div style="font-family: monospace;">
-                    <strong>Grid:</strong> ${feature.properties.id}<br/>
+                <div style="font-family: 'Inter', sans-serif; min-width: 200px;">
+                    <div style="
+                        font-weight: bold; 
+                        font-size: 14px; 
+                        margin-bottom: 8px;
+                        color: #1f2937;
+                        border-bottom: 2px solid #e5e7eb;
+                        padding-bottom: 4px;
+                    ">
+                        📍 Cell ${props.id}
+                    </div>
                     ${missingHtml}
-                    <strong>OTU:</strong> ${feature.properties.q_otu?.toFixed(3) ?? 'N/A'}<br/>
-                    <strong>NDVI:</strong> ${feature.properties.q_vi?.toFixed(3) ?? 'N/A'}<br/>
-                    <strong>Relief:</strong> ${feature.properties.q_relief?.toFixed(3) ?? 'N/A'}
+                    <div style="margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="color: #6b7280;">OTU Index:</span>
+                            <strong style="color: ${hasMissing ? '#9333ea' : '#059669'};">
+                                ${props.q_otu?.toFixed(3) ?? 'N/A'}
+                            </strong>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="color: #6b7280;">NDVI:</span>
+                            <span style="color: ${missing?.includes('ndvi') ? '#9333ea' : '#374151'};">
+                                ${props.q_vi?.toFixed(3) ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="color: #6b7280;">Soil (Si):</span>
+                            <span style="color: ${missing?.includes('soil') ? '#9333ea' : '#374151'};">
+                                ${props.q_si?.toFixed(3) ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="color: #6b7280;">Soil (Bi):</span>
+                            <span style="color: ${missing?.includes('soil') ? '#9333ea' : '#374151'};">
+                                ${props.q_bi?.toFixed(3) ?? 'N/A'}
+                            </span>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin: 4px 0;">
+                            <span style="color: #6b7280;">Relief:</span>
+                            <span style="color: ${missing?.includes('relief') ? '#9333ea' : '#374151'};">
+                                ${props.q_relief?.toFixed(3) ?? 'N/A'}
+                            </span>
+                        </div>
+                    </div>
                 </div>
             `;
-            layer.bindPopup(content);
+            layer.bindPopup(content, { maxWidth: 300 });
         }
     };
 
@@ -173,22 +244,25 @@ const LeafletMap = (props: MapViewProps) => {
                 <OTULayer grid={props.otuGrid} />
             )}
 
-            {props.activeLayers.fragments && props.fragmentEllipse && (
-                <Polygon
-                    positions={generateEllipsePoints(props.fragmentEllipse)}
-                    pathOptions={{ color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.15, weight: 2 }}
-                >
-                    <Popup>Fragment Ellipse (3σ)</Popup>
-                </Polygon>
-            )}
-
-            {props.activeLayers.primary && props.primaryEllipse && (
-                <Polygon
-                    positions={generateEllipsePoints(props.primaryEllipse)}
-                    pathOptions={{ color: '#ef4444', fillColor: '#ef4444', fillOpacity: 0.15, weight: 2 }}
-                >
-                    <Popup>Primary Ellipse (3σ)</Popup>
-                </Polygon>
+            {/* Render Ellipse Boundaries from Backend */}
+            {props.boundaries && props.boundaries.features && (
+                <GeoJSON
+                    data={props.boundaries as any}
+                    style={(feature) => {
+                        const isPrimary = feature?.properties?.type === 'primary';
+                        return {
+                            color: isPrimary ? '#ef4444' : '#f59e0b',
+                            fillColor: isPrimary ? '#ef4444' : '#f59e0b',
+                            fillOpacity: 0.15,
+                            weight: 3
+                        };
+                    }}
+                    onEachFeature={(feature, layer) => {
+                        if (feature.properties?.name) {
+                            layer.bindPopup(`<strong>${feature.properties.name}</strong>`);
+                        }
+                    }}
+                />
             )}
 
             {props.activeLayers.points && props.impactPoints && (
