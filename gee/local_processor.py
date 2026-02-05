@@ -380,15 +380,40 @@ def sample_geotiff_at_points(geotiff_path, grid_cells, default=np.nan):
             data = src.read(1)
             nodata = src.nodata
             
-            for i, cell in enumerate(grid_cells):
-                col, row = ~transform * (cell.center_lon, cell.center_lat)
-                row, col = int(row), int(col)
+            # Vectorized coordinate transformation
+            lons = np.array([c.center_lon for c in grid_cells])
+            lats = np.array([c.center_lat for c in grid_cells])
+
+            # ~transform * (x, y) returns (cols, rows) in float
+            cols_float, rows_float = ~transform * (lons, lats)
+
+            # Convert to indices (int() truncates towards 0, matching original behavior)
+            cols = cols_float.astype(int)
+            rows = rows_float.astype(int)
+
+            height, width = data.shape
+
+            # Valid indices mask
+            valid_mask = (rows >= 0) & (rows < height) & (cols >= 0) & (cols < width)
+
+            if np.any(valid_mask):
+                # Extract values for valid coordinates
+                valid_rows = rows[valid_mask]
+                valid_cols = cols[valid_mask]
+
+                extracted_values = data[valid_rows, valid_cols]
+
+                # Check for valid data (nodata and NaN)
+                is_data_valid = ~np.isnan(extracted_values)
+                if nodata is not None:
+                    is_data_valid &= (extracted_values != nodata)
+
+                # Update 'values' array where both coordinates and data are valid
+                valid_indices = np.where(valid_mask)[0]
+                final_indices = valid_indices[is_data_valid]
+                final_values = extracted_values[is_data_valid]
                 
-                if 0 <= row < data.shape[0] and 0 <= col < data.shape[1]:
-                    val = data[row, col]
-                    if nodata is None or val != nodata:
-                        if not np.isnan(val):
-                            values[i] = val
+                values[final_indices] = final_values
     except Exception as e:
         print(f"  [ERROR] Sampling {geotiff_path}: {e}")
     
