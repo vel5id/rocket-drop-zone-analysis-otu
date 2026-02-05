@@ -52,10 +52,10 @@ def _rk4_step(
     model_kwargs: Mapping[str, float],
 ) -> np.ndarray:
     """Runge-Kutta 4 integrator step."""
-    k1 = np.array(model.derivatives(t, y.tolist(), **model_kwargs))
-    k2 = np.array(model.derivatives(t + 0.5 * dt, (y + 0.5 * dt * k1).tolist(), **model_kwargs))
-    k3 = np.array(model.derivatives(t + 0.5 * dt, (y + 0.5 * dt * k2).tolist(), **model_kwargs))
-    k4 = np.array(model.derivatives(t + dt, (y + dt * k3).tolist(), **model_kwargs))
+    k1 = model.derivatives(t, y, **model_kwargs)
+    k2 = model.derivatives(t + 0.5 * dt, y + 0.5 * dt * k1, **model_kwargs)
+    k3 = model.derivatives(t + 0.5 * dt, y + 0.5 * dt * k2, **model_kwargs)
+    k4 = model.derivatives(t + dt, y + dt * k3, **model_kwargs)
     return y + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
 
