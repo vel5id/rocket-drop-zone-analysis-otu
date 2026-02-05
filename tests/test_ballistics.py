@@ -9,7 +9,8 @@ def test_density_decreases_with_altitude():
     assert rho_high < rho_low
 
 
-def test_ballistic_model_returns_four_derivatives():
+def test_ballistic_model_returns_six_derivatives():
     model = BallisticModel(reference_area_m2=40.0, dry_mass_kg=30_000.0)
-    derivs = model.derivatives(0.0, [0.0, 40_000.0, 1_700.0, 0.2])
-    assert len(derivs) == 4
+    # [downrange, crossrange, altitude, velocity, gamma, psi]
+    derivs = model.derivatives(0.0, [0.0, 0.0, 40_000.0, 1_700.0, 0.2, 0.0])
+    assert len(derivs) == 6
