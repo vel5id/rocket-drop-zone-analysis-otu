@@ -6,6 +6,7 @@
 которые должны быть реализованы согласно спецификации.
 """
 
+import math
 import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
@@ -217,20 +218,86 @@ def algorithm_6_impact_probability_calculation(
     """
     Алгоритм 6: Расчет вероятности попадания в каждую ячейку сетки.
     
-    TODO: Implement alg_6 according to spec - вычисление вероятности на основе
-    двумерного нормального распределения и эллипса рассеивания.
+    Реализовано: вычисление вероятности на основе двумерного нормального
+    распределения (PDF * Area) в системе координат, связанной с эллипсом рассеивания.
     
     Args:
-        impact_points: Точки падения
-        grid_cells: Ячейки сетки
+        impact_points: Точки падения (не используются в аналитическом методе, так как есть эллипс)
+        grid_cells: Ячейки сетки [(min_lat, max_lat, min_lon, max_lon), ...]
         ellipse: Эллипс рассеивания
         
     Returns:
         Массив вероятностей для каждой ячейки
     """
-    # TODO: Реализовать расчет вероятности по нормальному распределению
-    # Пока возвращаем равномерное распределение
-    probabilities = np.ones(len(grid_cells)) / len(grid_cells)
+    if not grid_cells:
+        return np.array([])
+
+    EARTH_RADIUS = 6371000.0
+
+    # 1. Подготовка данных сетки
+    # Преобразуем список кортежей в numpy массивы для векторизации
+    # grid_cells: list of (min_lat, max_lat, min_lon, max_lon)
+    cells_arr = np.array(grid_cells)
+    min_lats = cells_arr[:, 0]
+    max_lats = cells_arr[:, 1]
+    min_lons = cells_arr[:, 2]
+    max_lons = cells_arr[:, 3]
+
+    # Центры ячеек
+    center_lats = (min_lats + max_lats) / 2.0
+    center_lons = (min_lons + max_lons) / 2.0
+
+    # Площади ячеек (м²)
+    # d_lat (м) = d_lat_rad * R
+    d_lats_rad = np.radians(max_lats - min_lats)
+    d_lats_m = d_lats_rad * EARTH_RADIUS
+
+    # d_lon (м) = d_lon_rad * R * cos(lat)
+    d_lons_rad = np.radians(max_lons - min_lons)
+    d_lons_m = d_lons_rad * EARTH_RADIUS * np.cos(np.radians(center_lats))
+
+    areas = d_lats_m * d_lons_m
+
+    # 2. Преобразование координат (Lat/Lon -> Метры относительно центра эллипса)
+    # Используем приближение плоской Земли в окрестности центра эллипса
+    ellipse_center = ellipse.center
+    center_lat_rad = math.radians(ellipse_center.latitude)
+
+    # dy (Север)
+    dy = np.radians(center_lats - ellipse_center.latitude) * EARTH_RADIUS
+
+    # dx (Восток)
+    dx = np.radians(center_lons - ellipse_center.longitude) * EARTH_RADIUS * math.cos(center_lat_rad)
+
+    # 3. Поворот в систему координат эллипса
+    # orientation - азимут большой полуоси (градусы от севера по часовой стрелке)
+    alpha = math.radians(ellipse.orientation)
+    sin_a = math.sin(alpha)
+    cos_a = math.cos(alpha)
+
+    # Проекция на оси эллипса
+    # Major Axis (вдоль азимута): d . u_maj, где u_maj = (sin_a, cos_a) [East, North]
+    coord_maj = dx * sin_a + dy * cos_a
+
+    # Minor Axis (перпендикулярно, 90 град по часовой): d . u_min, где u_min = (cos_a, -sin_a)
+    coord_min = dx * cos_a - dy * sin_a
+
+    # 4. Расчет плотности вероятности (PDF)
+    # Стандартные отклонения
+    # semi_axis = sigma_level * sigma
+    sigma_maj = ellipse.semi_major_axis / max(ellipse.sigma_level, 1e-9)
+    sigma_min = ellipse.semi_minor_axis / max(ellipse.sigma_level, 1e-9)
+
+    # Гауссова формула для независимых осей (так как мы повернули систему)
+    # PDF = (1 / (2*pi*s1*s2)) * exp(-0.5 * ((x/s1)^2 + (y/s2)^2))
+
+    term_maj = (coord_maj / sigma_maj) ** 2
+    term_min = (coord_min / sigma_min) ** 2
+
+    pdf_val = (1.0 / (2 * np.pi * sigma_maj * sigma_min)) * np.exp(-0.5 * (term_maj + term_min))
+
+    # 5. Вероятность попадания = PDF * Area
+    probabilities = pdf_val * areas
     
     return probabilities
 
