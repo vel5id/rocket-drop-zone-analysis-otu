@@ -188,17 +188,26 @@ async def export_telemetry(analysis_id: str, include_tables: bool = True):
         
         # Try to get simulation results from job_id if linked
         # For simplicity, we'll just export configuration and tables
-        export_dir = recorder.export_data_package(
-            analysis_id=analysis_id,
-            result_data=None,
-            include_tables=include_tables
-        )
         
-        # List exported files
-        files = []
-        for f in export_dir.rglob("*"):
-            if f.is_file():
-                files.append(str(f.relative_to(recorder.base_dir)))
+        def _blocking_export_task():
+            """Execute blocking file I/O operations in a thread."""
+            exported_dir = recorder.export_data_package(
+                analysis_id=analysis_id,
+                result_data=None,
+                include_tables=include_tables
+            )
+
+            # List exported files (also I/O bound)
+            exported_files = []
+            for f in exported_dir.rglob("*"):
+                if f.is_file():
+                    exported_files.append(str(f.relative_to(recorder.base_dir)))
+            return exported_dir, exported_files
+
+        # Offload to thread pool
+        import asyncio
+        loop = asyncio.get_running_loop()
+        export_dir, files = await loop.run_in_executor(None, _blocking_export_task)
         
         return TelemetryExportResponse(
             analysis_id=analysis_id,
