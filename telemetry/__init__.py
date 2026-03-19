@@ -188,19 +188,33 @@ For questions about this analysis, refer to the project documentation.
 # Singleton instance for easy import
 _default_recorder = TelemetryRecorder()
 
+def generate_analysis_id(config: Dict[str, Any]) -> str:
+    """
+    Generate a unique Analysis ID based on configuration hash.
+
+    Args:
+        config: Simulation configuration dictionary
+
+    Returns:
+        Unique Analysis ID string
+    """
+    return _default_recorder.generate_analysis_id(config)
+
 def record_simulation(config: Dict[str, Any], 
-                     result_data: Optional[Dict[str, Any]] = None) -> str:
+                     result_data: Optional[Dict[str, Any]] = None,
+                     analysis_id: Optional[str] = None) -> str:
     """
     Convenience function to record a simulation in telemetry.
     
     Args:
         config: Simulation configuration
         result_data: Optional simulation results
+        analysis_id: Optional pre-calculated Analysis ID
         
     Returns:
         Analysis ID
     """
-    analysis_id = _default_recorder.save_configuration(config)
+    analysis_id = _default_recorder.save_configuration(config, analysis_id=analysis_id)
     
     if result_data:
         _default_recorder.export_data_package(analysis_id, result_data)
