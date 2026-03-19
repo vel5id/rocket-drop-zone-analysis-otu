@@ -26,7 +26,7 @@ from .zone_preview_logic import get_zone_preview
 
 # Telemetry for reproducibility
 try:
-    from telemetry import record_simulation
+    from telemetry import record_simulation, generate_analysis_id
     TELEMETRY_AVAILABLE = True
 except ImportError:
     TELEMETRY_AVAILABLE = False
@@ -75,7 +75,7 @@ async def health_check():
 
 
 @app.post("/api/simulation/run", response_model=SimulationStatusResponse, tags=["Simulation"])
-async def run_simulation(request: SimulationRequest):
+async def run_simulation(request: SimulationRequest, background_tasks: BackgroundTasks):
     """
     Start a new Monte Carlo simulation.
     
@@ -87,8 +87,11 @@ async def run_simulation(request: SimulationRequest):
     analysis_id = None
     if TELEMETRY_AVAILABLE:
         config_dict = request.dict()
-        analysis_id = record_simulation(config_dict)
-        print(f"Recorded simulation configuration with Analysis ID: {analysis_id}")
+        # Pre-calculate Analysis ID to return immediately
+        analysis_id = generate_analysis_id(config_dict)
+        # Offload blocking file I/O to background tasks
+        background_tasks.add_task(record_simulation, config_dict, analysis_id=analysis_id)
+        print(f"Scheduled telemetry recording for Analysis ID: {analysis_id}")
     
     # Start simulation in background
     run_simulation_async(
