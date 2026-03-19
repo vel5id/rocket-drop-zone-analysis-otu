@@ -260,18 +260,8 @@ async def generate_export(request: ExportRequest, background_tasks: BackgroundTa
     async def _run_export(tid: str, req: ExportRequest):
         try:
             print(f"[EXPORT] Starting task {tid} for job {req.job_id}")
-            # Run generator (it's async but uses blocking calls, might need threadpool if heavy)
-            # For now, just await it directly if it's truly async, or run in executor
-            # generate_report_package is defined as async but uses blocking GEE/Pandas.
-            # Ideally wrap in run_in_executor for production.
-            loop = asyncio.get_event_loop()
-            path = await loop.run_in_executor(None, lambda: asyncio.run(generate_report_package(req))) \
-                   if not asyncio.iscoroutinefunction(generate_report_package) else await generate_report_package(req)
-            
-            # Since generate_report_package in my code WAS defined as async but I didn't verify if it awaits anything.
-            # Actually I wrote `async def generate_report_package`.
-            # But GEE calls are blocking.
-            # Best to run it synchronously in a thread.
+            # generate_report_package is async and internally unblocks the event loop
+            path = await generate_report_package(req)
             
             export_tasks[tid]["status"] = "completed"
             export_tasks[tid]["file_path"] = path
