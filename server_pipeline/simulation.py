@@ -236,6 +236,7 @@ def run_simulation_safe(
     update(89, "Calculating Ecological Indices (GEE)...")
     
     # We call the calculator logic here to populate properties in grid_cells
+    otu_stats = {}
     try:
         from otu.calculator import calculate_otu_for_grid
         
@@ -285,8 +286,8 @@ def run_simulation_safe(
                 print("[Simulation] WARNING: Cell 1 has NO OTU attributes after mapping")
 
         # Check stats
-        stats = calc_result.get('statistics', {})
-        update(90, f"OTU Calculated. Mean: {stats.get('mean', 0):.3f}")
+        otu_stats = calc_result.get('statistics', {})
+        update(90, f"OTU Calculated. Mean: {otu_stats.get('mean', 0):.3f}")
         
     except Exception as e:
         print(f"OTU Calculation Failed: {e}")
@@ -337,6 +338,7 @@ def run_simulation_safe(
             "fragment_impacts": len(fragment_geo),
             "filtered_fragments": len(filtered_fragments),
             "grid_cells": len(grid_cells),
+            "avg_otu": otu_stats.get('mean', 0),
         },
         date_config={
             "target_date": target_date,

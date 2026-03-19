@@ -40,6 +40,10 @@ try:
     print(f"Simulation completed in {time.time() - start:.2f}s")
     if result:
         print(f"Result stats: {result.stats}")
+        # Verify avg_otu exists and is a float
+        assert "avg_otu" in result.stats, "avg_otu missing from result stats"
+        assert isinstance(result.stats["avg_otu"], (int, float)), f"avg_otu should be a number, got {type(result.stats['avg_otu'])}"
+        print(f"Verified avg_otu: {result.stats['avg_otu']}")
     else:
         print("Result is None!")
 except Exception as e:

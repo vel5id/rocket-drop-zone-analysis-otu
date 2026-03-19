@@ -73,6 +73,7 @@ export interface APISimulationStats {
     primary_impacts: number;
     fragment_impacts: number;
     grid_cells: number;
+    avg_otu?: number;
 }
 
 export interface SimulationConfig {

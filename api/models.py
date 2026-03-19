@@ -66,6 +66,7 @@ class SimulationStats(BaseModel):
     primary_impacts: int
     fragment_impacts: int
     grid_cells: int
+    avg_otu: float = 0.0
 
 
 class GeoJSONFeature(BaseModel):
