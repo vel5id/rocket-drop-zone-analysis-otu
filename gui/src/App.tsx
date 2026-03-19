@@ -25,6 +25,19 @@ import { calculateDistance } from './utils';
 const LAUNCH_LAT = 45.72341;
 const LAUNCH_LON = 63.32275;
 
+/**
+ * Calculates the average OTU value from a grid of OTU cells.
+ */
+const calculateAvgOtu = (otuGrid: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties> | undefined): number => {
+    if (!otuGrid || !otuGrid.features || otuGrid.features.length === 0) return 0;
+
+    const processedFeatures = otuGrid.features.filter(f => f.properties && f.properties.is_processed);
+    if (processedFeatures.length === 0) return 0;
+
+    const total = processedFeatures.reduce((sum, feature) => sum + (feature.properties.q_otu || 0), 0);
+    return total / processedFeatures.length;
+};
+
 export default function App() {
     const [sidebarOpen, setSidebarOpen] = useState(true);
     const [resultsOpen, setResultsOpen] = useState(true);
@@ -216,7 +229,7 @@ export default function App() {
                     impactPoints: result.stats.primary_impacts + result.stats.fragment_impacts,
                     range: `${rangeKm.toFixed(1)}`,
                     semiMajorAxis: result.primary_ellipse?.semi_major_km || 0,
-                    avgOtu: 0.72,  // TODO: Calculate from OTU grid stats
+                    avgOtu: result.stats.avg_otu !== undefined ? result.stats.avg_otu : calculateAvgOtu(result.otu_grid as any),
                     primaryEllipse: {
                         a: (result.primary_ellipse?.semi_major_km || 0) * 2,
                         b: (result.primary_ellipse?.semi_minor_km || 0) * 2,
