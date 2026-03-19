@@ -1,4 +1,18 @@
-import { EllipseData } from './types';
+import { EllipseData, GeoJSONFeatureCollection, GeoJSONPolygon, OTUCellProperties } from './types';
+
+/**
+ * Calculates the average OTU value from an OTU grid.
+ * Only includes processed cells in the calculation.
+ */
+export function calculateAvgOtu(otuGrid?: GeoJSONFeatureCollection<GeoJSONPolygon, OTUCellProperties>): number {
+    if (!otuGrid || !otuGrid.features || otuGrid.features.length === 0) return 0;
+
+    const processedFeatures = otuGrid.features.filter(f => f.properties.is_processed);
+    if (processedFeatures.length === 0) return 0;
+
+    const sum = processedFeatures.reduce((acc, f) => acc + (f.properties.q_otu || 0), 0);
+    return sum / processedFeatures.length;
+}
 
 export function generateEllipsePoints(ellipse: EllipseData, numPoints: number = 64): [number, number][] {
     const { center_lat, center_lon, semi_major_km, semi_minor_km, angle_deg } = ellipse;

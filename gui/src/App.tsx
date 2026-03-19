@@ -20,7 +20,7 @@ import {
     TrajectoryPoint,
     UIStats
 } from './types';
-import { calculateDistance } from './utils';
+import { calculateDistance, calculateAvgOtu } from './utils';
 
 const LAUNCH_LAT = 45.72341;
 const LAUNCH_LON = 63.32275;
@@ -216,7 +216,7 @@ export default function App() {
                     impactPoints: result.stats.primary_impacts + result.stats.fragment_impacts,
                     range: `${rangeKm.toFixed(1)}`,
                     semiMajorAxis: result.primary_ellipse?.semi_major_km || 0,
-                    avgOtu: 0.72,  // TODO: Calculate from OTU grid stats
+                    avgOtu: calculateAvgOtu(result.otu_grid as any),
                     primaryEllipse: {
                         a: (result.primary_ellipse?.semi_major_km || 0) * 2,
                         b: (result.primary_ellipse?.semi_minor_km || 0) * 2,
