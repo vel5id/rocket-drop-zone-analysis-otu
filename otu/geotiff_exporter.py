@@ -171,10 +171,11 @@ class GeoTIFFExporter:
         # NDVI
         ndvi = composite.normalizedDifference(["B8", "B4"]).rename("NDVI")
         
-        # Clamp to [0, 1] for vegetation
-        ndvi_clamped = ndvi.clamp(0, 1)
+        # Clamp to [0, 1] for vegetation and unmask
+        # CRITICAL FIX: unmask(0.0) ensures complete coverage
+        ndvi_final = ndvi.clamp(0, 1).unmask(0.0)
         
-        return ndvi_clamped.clip(roi)
+        return ndvi_final.clip(roi)
     
     def _prepare_soil_strength(self, roi: "ee.Geometry") -> "ee.Image":
         """Prepare Q_Si (soil strength) from SoilGrids."""
@@ -186,7 +187,8 @@ class GeoTIFFExporter:
         clay_norm = clay.divide(600).clamp(0, 1)
         
         # Combined Q_Si
-        q_si = bd_norm.multiply(0.6).add(clay_norm.multiply(0.4)).rename("Q_Si")
+        # CRITICAL FIX: unmask(0.0) ensures complete coverage
+        q_si = bd_norm.multiply(0.6).add(clay_norm.multiply(0.4)).unmask(0.0).rename("Q_Si")
         
         return q_si.clip(roi)
     
@@ -200,7 +202,8 @@ class GeoTIFFExporter:
         n_norm = nitrogen.divide(20).clamp(0, 1)
         
         # Combined Q_Bi
-        q_bi = soc_norm.multiply(0.7).add(n_norm.multiply(0.3)).rename("Q_Bi")
+        # CRITICAL FIX: unmask(0.0) ensures complete coverage
+        q_bi = soc_norm.multiply(0.7).add(n_norm.multiply(0.3)).unmask(0.0).rename("Q_Bi")
         
         return q_bi.clip(roi)
     
@@ -220,11 +223,13 @@ class GeoTIFFExporter:
         water_penalty = is_water.multiply(0.5)
         
         # Q_relief = 1 - penalties
+        # CRITICAL FIX: unmask(0.0) ensures complete coverage
         q_relief = (
             ee.Image.constant(1.0)
             .subtract(slope_penalty)
             .subtract(water_penalty)
             .clamp(0, 1)
+            .unmask(0.0)
             .rename("Q_relief")
         )
         
