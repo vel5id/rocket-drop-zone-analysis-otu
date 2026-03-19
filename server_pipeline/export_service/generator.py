@@ -7,6 +7,7 @@ Orchestrates the creation of the full export package:
 3. Formats into CSV/Excel tables.
 4. Packages into a downloadable archive.
 """
+import asyncio
 import os
 import uuid
 import zipfile
@@ -71,6 +72,16 @@ async def generate_report_package(request: ExportRequest) -> str:
     """
     Generate the full report package for a given job.
     Includes 10 detailed tables as requested by review.
+
+    This function is a wrapper that runs the blocking generation logic
+    in a separate thread to avoid blocking the FastAPI event loop.
+    """
+    return await asyncio.to_thread(_generate_report_package_sync, request)
+
+def _generate_report_package_sync(request: ExportRequest) -> str:
+    """
+    Synchronous implementation of report generation.
+    Handles GEE fetching, Pandas processing, and Zip operations.
     """
     # 1. Fetch Job Data
     job_result = get_simulation_result(request.job_id)
