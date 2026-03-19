@@ -380,15 +380,40 @@ def sample_geotiff_at_points(geotiff_path, grid_cells, default=np.nan):
             data = src.read(1)
             nodata = src.nodata
             
-            for i, cell in enumerate(grid_cells):
-                col, row = ~transform * (cell.center_lon, cell.center_lat)
-                row, col = int(row), int(col)
+            # Vectorized sampling for improved performance
+            # 1. Extract all coordinates at once
+            lons = np.fromiter((c.center_lon for c in grid_cells), dtype=np.float64, count=n_points)
+            lats = np.fromiter((c.center_lat for c in grid_cells), dtype=np.float64, count=n_points)
+
+            # 2. Convert to row/col indices using rasterio.transform.rowcol
+            import rasterio.transform
+            rows, cols = rasterio.transform.rowcol(transform, lons, lats)
+            rows = np.asarray(rows)
+            cols = np.asarray(cols)
+
+            # 3. Filter points within raster bounds
+            h, w = data.shape
+            mask = (rows >= 0) & (rows < h) & (cols >= 0) & (cols < w)
+
+            if np.any(mask):
+                valid_rows = rows[mask]
+                valid_cols = cols[mask]
+
+                # 4. Sample data from NumPy array in one go
+                sampled = data[valid_rows, valid_cols]
+
+                # 5. Handle nodata and NaN
+                if nodata is not None:
+                    valid_val_mask = (sampled != nodata)
+                else:
+                    valid_val_mask = np.ones_like(sampled, dtype=bool)
+
+                if np.issubdtype(sampled.dtype, np.floating):
+                    valid_val_mask &= ~np.isnan(sampled)
                 
-                if 0 <= row < data.shape[0] and 0 <= col < data.shape[1]:
-                    val = data[row, col]
-                    if nodata is None or val != nodata:
-                        if not np.isnan(val):
-                            values[i] = val
+                # 6. Map back to result array
+                target_indices = np.where(mask)[0][valid_val_mask]
+                values[target_indices] = sampled[valid_val_mask]
     except Exception as e:
         print(f"  [ERROR] Sampling {geotiff_path}: {e}")
     
