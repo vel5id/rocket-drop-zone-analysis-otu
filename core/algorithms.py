@@ -10,6 +10,7 @@ import numpy as np
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass
 from .dto import GeoPoint, BoundingBox, DispersionEllipse, ImpactPoint
+from .geo_utils import EARTH_RADIUS_M
 
 
 def algorithm_1_trajectory_integration(
@@ -95,8 +96,8 @@ def algorithm_3_dispersion_ellipse_calculation(
     """
     Алгоритм 3: Расчет эллипса рассеивания по точкам падения.
     
-    TODO: Implement alg_3 according to spec - вычисление ковариационной матрицы
-    и параметров эллипса рассеивания.
+    Вычисляет ковариационную матрицу в локальной метрической системе координат
+    и определяет параметры эллипса рассеивания (полуоси и ориентацию).
     
     Args:
         impact_points: Точки падения
@@ -105,6 +106,9 @@ def algorithm_3_dispersion_ellipse_calculation(
     Returns:
         Эллипс рассеивания
     """
+    # Доверительная вероятность в 2D (1 - exp(-k^2 / 2))
+    confidence_2d = float(1.0 - np.exp(-(sigma_level**2) / 2.0))
+
     if not impact_points:
         # Возвращаем эллипс по умолчанию
         center = GeoPoint(latitude=45.0, longitude=60.0)
@@ -113,29 +117,64 @@ def algorithm_3_dispersion_ellipse_calculation(
             semi_major_axis=1000.0,
             semi_minor_axis=500.0,
             orientation=45.0,
-            sigma_level=sigma_level
+            sigma_level=sigma_level,
+            confidence=confidence_2d
         )
     
-    # TODO: Реализовать расчет ковариационной матрицы
-    # Пока используем простую статистику
-    lats = [p.latitude for p in impact_points]
-    lons = [p.longitude for p in impact_points]
+    # Реализация расчета ковариационной матрицы и параметров эллипса
+    lats = np.array([p.latitude for p in impact_points])
+    lons = np.array([p.longitude for p in impact_points])
     
     center_lat = np.mean(lats)
     center_lon = np.mean(lons)
     
-    # Простые оценки дисперсий
-    lat_std = np.std(lats) * 111000  # Примерно метров на градус широты
-    lon_std = np.std(lons) * 111000 * np.cos(np.radians(center_lat))
+    if len(impact_points) < 2:
+        return DispersionEllipse(
+            center=GeoPoint(latitude=center_lat, longitude=center_lon),
+            semi_major_axis=0.0,
+            semi_minor_axis=0.0,
+            orientation=0.0,
+            sigma_level=sigma_level,
+            confidence=0.0
+        )
+
+    # Перевод в локальные метрические координаты (метры)
+    # Используем средний радиус Земли из core/geo_utils.py
+    lat_ref = np.radians(center_lat)
+
+    # dy: Север-Юг (по широте), dx: Восток-Запад (по долготе)
+    dy = np.radians(lats - center_lat) * EARTH_RADIUS_M
+    dx = np.radians(lons - center_lon) * EARTH_RADIUS_M * np.cos(lat_ref)
+
+    points_metric = np.column_stack((dx, dy))
+
+    # Расчет ковариационной матрицы
+    cov = np.cov(points_metric, rowvar=False)
+
+    # В случае 2x2 матрицы np.linalg.eigh возвращает собственные значения и векторы
+    eigenvalues, eigenvectors = np.linalg.eigh(cov)
+
+    # Сортировка собственных значений по убыванию
+    idx = np.argsort(eigenvalues)[::-1]
+    eigenvalues = eigenvalues[idx]
+    eigenvectors = eigenvectors[:, idx]
+
+    # Длины полуосей (масштабированные согласно sigma_level)
+    semi_major = np.sqrt(max(eigenvalues[0], 0)) * sigma_level
+    semi_minor = np.sqrt(max(eigenvalues[1], 0)) * sigma_level
     
-    center = GeoPoint(latitude=center_lat, longitude=center_lon)
+    # Ориентация: угол большой оси от севера по часовой стрелке
+    # Собственный вектор для большой оси: [v_dx, v_dy]
+    v_dx, v_dy = eigenvectors[:, 0]
+    orientation_deg = np.degrees(np.arctan2(v_dx, v_dy)) % 360
     
     return DispersionEllipse(
-        center=center,
-        semi_major_axis=lat_std * sigma_level,
-        semi_minor_axis=lon_std * sigma_level,
-        orientation=0.0,  # TODO: Вычислить ориентацию
-        sigma_level=sigma_level
+        center=GeoPoint(latitude=center_lat, longitude=center_lon),
+        semi_major_axis=float(semi_major),
+        semi_minor_axis=float(semi_minor),
+        orientation=float(orientation_deg),
+        sigma_level=sigma_level,
+        confidence=confidence_2d
     )
 
 
