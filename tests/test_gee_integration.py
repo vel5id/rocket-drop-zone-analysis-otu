@@ -528,19 +528,19 @@ def main():
     
     success = True
     
-    if args.test in ["all", "imports"]:
+    if args.test in {"all", "imports"}:
         success = test_imports() and success
     
-    if args.test in ["all", "auth"]:
+    if args.test in {"all", "auth"}:
         success = test_authentication() and success
     
-    if args.test in ["all", "mock"]:
+    if args.test in {"all", "mock"}:
         success = test_mock_data() and success
     
-    if args.test in ["all", "gee"]:
+    if args.test in {"all", "gee"}:
         success = test_gee_data() and success
     
-    if args.test in ["all", "pipeline"]:
+    if args.test in {"all", "pipeline"}:
         success = test_pipeline_mock() and success
         if args.test == "all":
             success = test_pipeline_gee() and success
