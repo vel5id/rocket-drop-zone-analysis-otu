@@ -132,6 +132,7 @@ def grid_to_geojson(
         
         props = {
             "id": getattr(cell, "id", f"cell_{i+1}"),  # Use cell.id if available
+            "grid_id": getattr(cell, "grid_id", getattr(cell, "id", f"cell_{i+1}")),  # ✅ Required for frontend heatmap tooltips
             "center_lat": cell.center_lat,
             "center_lon": cell.center_lon,
         }

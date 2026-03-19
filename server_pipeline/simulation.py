@@ -208,11 +208,6 @@ def run_simulation_safe(
     if fragment_ellipse:
         update(70, f"Fragment: {fragment_ellipse['semi_major_km']:.1f}x{fragment_ellipse['semi_minor_km']:.1f} km")
     
-    if primary_ellipse:
-        update(65, f"Primary: {primary_ellipse['semi_major_km']:.1f}x{primary_ellipse['semi_minor_km']:.1f} km")
-    if fragment_ellipse:
-        update(70, f"Fragment: {fragment_ellipse['semi_major_km']:.1f}x{fragment_ellipse['semi_minor_km']:.1f} km")
-    
     # =========================================================================
     # STEP 4: Generate Grid
     # =========================================================================
@@ -265,16 +260,17 @@ def run_simulation_safe(
         # ChunkManager.from_grid_cells preserves order, so we can zip them.
         processed_chunks = calc_result.get('chunks', [])
         if processed_chunks and len(processed_chunks) == len(grid_cells):
-             for cell, chunk in zip(grid_cells, processed_chunks):
-                 if chunk.is_processed:
-                     cell.q_vi = chunk.q_vi
-                     cell.q_si = chunk.q_si
-                     cell.q_bi = chunk.q_bi
-                     cell.q_relief = chunk.q_relief
-                     cell.q_otu = chunk.q_otu
-                     cell.is_processed = chunk.is_processed
-                     cell.missing_data = chunk.missing_data  # ✅ Added
-                     cell.id = chunk.id  # ✅ Added for proper ID
+            for cell, chunk in zip(grid_cells, processed_chunks):
+                if chunk.is_processed:
+                    cell.q_vi = chunk.q_vi
+                    cell.q_si = chunk.q_si
+                    cell.q_bi = chunk.q_bi
+                    cell.q_relief = chunk.q_relief
+                    cell.q_otu = chunk.q_otu
+                    cell.is_processed = chunk.is_processed
+                    cell.missing_data = chunk.missing_data  # ✅ Added
+                    cell.id = chunk.id  # ✅ Added for proper ID
+                    cell.grid_id = chunk.id  # ✅ Added for frontend heatmap tooltip
         
         # Verification Log
         if grid_cells:
