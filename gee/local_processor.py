@@ -268,7 +268,10 @@ def fetch_ndvi_tiled(grid_cells, target_date, cache_dir="output/gee_cache", scal
         composite = s2.map(mask_clouds).median()
         ndvi = composite.normalizedDifference(["B8", "B4"]).rename("NDVI")
         
-        result = download_and_mosaic(ndvi, plan, cache_dir, f"ndvi_{year}-{month:02d}_{scale_m}m")
+        # CRITICAL FIX: Use unmask(0.0) to fill masked pixels before download
+        ndvi_final = ndvi.unmask(0.0)
+
+        result = download_and_mosaic(ndvi_final, plan, cache_dir, f"ndvi_{year}-{month:02d}_{scale_m}m")
         if not result:
             return np.full(len(grid_cells), np.nan)
         cache_path = result
